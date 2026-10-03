@@ -1,0 +1,700 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Squad Callout Drill</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one tactical column &mdash; HUD strip, radar field, comms console below. Single committed dark "night-ops" look. */
+:root {
+  color-scheme: dark;
+  --ground: #0f1519;
+  --panel: #161f25;
+  --line: #26343d;
+  --grid: #1c2830;
+  --ink: #e4ebe8;
+  --muted: #8b9ea4;
+  --amber: #f0a83a;
+  --teal: #4fc2b4;
+  --hostile: #e8625a;
+  --locked: #6d4a4a;
+  --good: #6fcf8a;
+  --display: "Saira Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--ground); color: var(--ink); }
+body { font-family: var(--body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 560px; margin: 0 auto; padding-block: 16px 32px; padding-inline: 16px; display: flex; flex-direction: column; gap: 12px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--display); font-weight: 800; font-size: 30px; letter-spacing: .04em; text-transform: uppercase; margin: 0; line-height: 1; }
+h1 span { color: var(--amber); }
+.tag { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.hud { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.hp { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hp-bar { flex: 1; height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+.hp-fill { height: 100%; width: 100%; background: var(--good); transition: width .2s, background .2s; }
+.hud b { color: var(--amber); font-weight: 500; }
+.field { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--ground); }
+canvas { display: block; width: 100%; touch-action: manipulation; cursor: crosshair; }
+.overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: color-mix(in srgb, var(--ground) 78%, transparent); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; max-width: 400px; width: 100%; display: flex; flex-direction: column; gap: 10px; max-height: 100%; overflow-y: auto; }
+.card h2 { font-family: var(--display); font-size: 24px; text-transform: uppercase; letter-spacing: .05em; margin: 0; text-wrap: balance; }
+.card p { margin: 0; color: var(--muted); font-size: 14px; }
+.card p strong { color: var(--ink); font-weight: 600; }
+.example { font-family: var(--mono); color: var(--amber); font-size: 14px; }
+.grade { font-family: var(--display); font-size: 64px; font-weight: 800; line-height: 1; color: var(--amber); }
+.stats { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.stats dt { color: var(--muted); }
+.stats dd { margin: 0; font-family: var(--mono); text-align: right; }
+.tip { border-left: 3px solid var(--amber); padding-left: 10px; color: var(--ink) !important; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.primary { background: var(--amber); color: #1a1206; border: 0; border-radius: 8px; padding: 12px 16px; font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: .08em; text-transform: uppercase; }
+.heard { font-family: var(--mono); font-size: 13px; color: var(--muted); min-height: 1.4em; overflow-wrap: anywhere; }
+.heard em { color: var(--amber); font-style: normal; }
+.console { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: stretch; }
+.talk { width: 92px; min-height: 92px; border-radius: 50%; border: 2px solid var(--amber); background: transparent; font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: .1em; color: var(--amber); user-select: none; -webkit-user-select: none; touch-action: none; align-self: center; }
+.talk.live { background: var(--amber); color: #1a1206; }
+.talk:disabled { opacity: .35; cursor: not-allowed; }
+.side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.mic-status { font-size: 12px; color: var(--muted); }
+form { display: flex; gap: 8px; }
+input[type=text] { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); padding: 10px 12px; font-family: var(--mono); font-size: 14px; }
+.send { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 0 14px; }
+.pad { display: flex; flex-direction: column; gap: 6px; }
+.pad-label { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.chip { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 4px; font-family: var(--display); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 15px; }
+.chip[aria-pressed="true"] { border-color: var(--amber); color: var(--amber); }
+.toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.log { list-style: none; margin: 0; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; font-family: var(--mono); font-size: 13px; display: flex; flex-direction: column; gap: 4px; min-height: 120px; }
+.log li { overflow-wrap: anywhere; }
+.log .who { display: inline-block; min-width: 4.5em; letter-spacing: .06em; }
+.log .you .who { color: var(--amber); }
+.log .bot .who { color: var(--teal); }
+.log .sys .who { color: var(--hostile); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+@media (max-width: 420px) { .talk { width: 78px; min-height: 78px; font-size: 15px; } h1 { font-size: 26px; } }
+@media (prefers-reduced-motion: reduce) { .hp-fill { transition: none; } }
+.roster { font-size: 13px; color: var(--muted); }
+.roster b { color: var(--teal); font-family: var(--display); letter-spacing: .08em; font-size: 15px; }
+.talk.on { background: var(--amber); color: #1a1206; }
+.talk.busy { border-style: dashed; }
+.log .coach .who { color: var(--good); }
+.diff { display: flex; flex-direction: column; gap: 6px; }
+.diff-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.diff-note { font-size: 13px !important; min-height: 1.4em; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Squad <span>Callout</span></h1>
+    <div class="tag">Drill &middot; prototype 0.6</div>
+  </header>
+
+  <div class="hud" aria-live="polite">
+    <div class="hp"><span>HP</span><div class="hp-bar"><div class="hp-fill" id="hpFill"></div></div></div>
+    <div>T <b id="timeOut">90</b>s</div>
+    <div>PTS <b id="scoreOut">0</b></div>
+  </div>
+
+  <div class="field">
+    <canvas id="cv" aria-label="Top-down drill field. Enemies appear in the left, front and right sectors."></canvas>
+    <div class="overlay" id="overlay">
+      <div class="card" id="card">
+        <h2>No callout, no shot</h2>
+        <p>Every enemy spawns <strong>locked</strong>. Call it with a <strong>count</strong> and a <strong>sector</strong> to unlock it and send your squad.</p>
+        <p class="example">"Two left, engaging. One right."</p>
+        <p>Put several calls in one breath. Use names to give orders: <strong>"Brick, two front"</strong> or <strong>"Cole, cover me"</strong>. Tap unlocked enemies to fire.</p>
+        <p>Turn the <strong>MIC</strong> on once and it stays open all round.</p>
+        <button class="primary" id="startBtn" type="button">Start drill</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--locked)"></i>Locked enemy</span>
+    <span><i style="background:var(--hostile)"></i>Unlocked</span>
+    <span><i style="background:var(--teal)"></i>Squad</span>
+    <span><i style="background:var(--amber)"></i>You</span>
+  </div>
+  <div class="roster">Squad: <b>ACE</b> holds left &middot; <b>COLE</b> holds front &middot; <b>BRICK</b> holds right. Say a name to reassign them.</div>
+
+  <div class="heard" id="heard">Heard: &mdash;</div>
+
+  <div class="console">
+    <button class="talk" id="talkBtn" type="button" aria-pressed="false" aria-label="Microphone on or off">MIC<br>OFF</button>
+    <div class="side">
+      <div class="mic-status" id="micStatus">Tap MIC once. It stays open until you tap it again.</div>
+      <form id="typeForm">
+        <input type="text" id="typeIn" placeholder="or type: two left, one right" autocomplete="off" aria-label="Type a callout">
+        <button class="send" type="submit">Call</button>
+      </form>
+      <label class="toggle"><input type="checkbox" id="voiceToggle" checked> Squad talks back</label>
+    </div>
+  </div>
+
+  <div class="pad" aria-label="Callout pad">
+    <div class="pad-label">Callout pad &middot; pick a count, then a sector</div>
+    <div class="row">
+      <button class="chip" type="button" data-count="one" aria-pressed="false">One</button>
+      <button class="chip" type="button" data-count="two" aria-pressed="true">Two</button>
+      <button class="chip" type="button" data-count="three" aria-pressed="false">Three</button>
+    </div>
+    <div class="row">
+      <button class="chip" type="button" data-zone="left">Left</button>
+      <button class="chip" type="button" data-zone="front">Front</button>
+      <button class="chip" type="button" data-zone="right">Right</button>
+    </div>
+  </div>
+
+  <ul class="log" id="log" aria-live="polite"></ul>
+</div>
+
+<script>
+(() => {
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const C = { ground: css('--ground'), grid: css('--grid'), line: css('--line'), ink: css('--ink'), muted: css('--muted'), amber: css('--amber'), teal: css('--teal'), hostile: css('--hostile'), locked: css('--locked') };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  const ROUND = 90;
+  const ZONES = {
+    left:  { x0: .06, x1: .30, y0: .16, y1: .56, label: 'LEFT',  post: { x: .30, y: .66 } },
+    front: { x0: .37, x1: .63, y0: .08, y1: .32, label: 'FRONT', post: { x: .50, y: .52 } },
+    right: { x0: .70, x1: .94, y0: .16, y1: .56, label: 'RIGHT', post: { x: .70, y: .66 } }
+  };
+  const DIFFS = {
+    recruit: { label: 'Recruit', note: 'Slower enemies, lighter hits. Learn the calls.', dmg: 2, first: [5, 6.5], gap: [5, 7], max: 2 },
+    regular: { label: 'Regular', note: 'Standard pace.', dmg: 3, first: [3.5, 5], gap: [3.5, 6], max: 2 },
+    veteran: { label: 'Veteran', note: 'Faster shots, up to three contacts at once.', dmg: 3, first: [2.5, 3.5], gap: [2.5, 4.5], max: 3 }
+  };
+  let diffKey = 'regular';
+  try { const v = localStorage.getItem('squadcallout.diff'); if (DIFFS[v]) diffKey = v; } catch (e) {}
+  let D = DIFFS[diffKey];
+  const PLAYER = { x: .5, y: .88 };
+  const COVER = [[.14,.62,.1,.04],[.76,.62,.1,.04],[.44,.40,.12,.035],[.30,.30,.05,.08],[.65,.30,.05,.08]];
+
+  // ---------- squad ----------
+  const bots = [
+    { id: 'ace',   name: 'Ace',   zone: 'left',  home: { x: .40, y: .84 }, pitch: 1.15 },
+    { id: 'cole',  name: 'Cole',  zone: 'front', home: { x: .50, y: .78 }, pitch: 0.95 },
+    { id: 'brick', name: 'Brick', zone: 'right', home: { x: .60, y: .84 }, pitch: 0.75 }
+  ];
+  const botById = id => bots.find(b => b.id === id);
+
+  // ---------- parser (pure) ----------
+  // Includes common speech-recognition mishearings ("Lyft" for left, "write" for right, "tree" for three).
+  const NAMES = { ace: 'ace', ase: 'ace', aice: 'ace', aces: 'ace', ice: 'ace', cole: 'cole', coal: 'cole', kohl: 'cole', col: 'cole', coll: 'cole', koal: 'cole', call: 'cole', cold: 'cole', brick: 'brick', bric: 'brick', brik: 'brick', bricks: 'brick', rick: 'brick', brig: 'brick' };
+  const NUM = { one:1, won:1, single:1, solo:1, '1':1, two:2, couple:2, pair:2, '2':2, tue:2, three:3, tree:3, free:3, '3':3, four:4, '4':4, multiple:'many', several:'many', group:'many', many:'many' };
+  const ZONE_WORDS = { left:'left', lift:'left', lyft:'left', lef:'left', leff:'left', laughed:'left', lefts:'left', right:'right', write:'right', rite:'right', wright:'right', riot:'right', rights:'right', bright:'right', front:'front', fronts:'front', frunt:'front', ahead:'front', forward:'front', center:'front', centre:'front', middle:'front', top:'front', north:'front' };
+  const SEPS = new Set(['and', 'then', 'also', 'plus', 'next']);
+  const ACTION_RE = /\b(engag\w*|gauging|push\w*|flank\w*|attack\w*|rush\w*|fir(e|ing)|shoot\w*|taking|take)\b/;
+  const CONTACT_RE = /\b(contact|contacts|enemy|enemies|hostile|hostiles|tango|tangos)\b/;
+
+  function isCountAt(words, i) {
+    const w = words[i];
+    if (NUM[w] !== undefined) return true;
+    return (w === 'to' || w === 'too') && !!ZONE_WORDS[words[i + 1]];
+  }
+  function splitSegments(text) {
+    const words = String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+    const segs = []; let cur = [], hasZone = false, hasName = false;
+    const flush = () => { if (cur.length) segs.push(cur); cur = []; hasZone = false; hasName = false; };
+    words.forEach((w, i) => {
+      if (SEPS.has(w)) { flush(); return; }
+      const isName = !!NAMES[w], isCount = isCountAt(words, i), isZone = !!ZONE_WORDS[w];
+      if (cur.length && ((isName && (hasZone || hasName)) || (isCount && hasZone) || (isZone && hasZone))) flush();
+      cur.push(w);
+      if (isZone) hasZone = true;
+      if (isName) hasName = true;
+    });
+    flush();
+    return segs;
+  }
+  function parseSegment(words) {
+    const text = words.join(' ');
+    let name = null, zone = null, count = null;
+    words.forEach((w, i) => {
+      if (!name && NAMES[w]) name = NAMES[w];
+      if (!zone && ZONE_WORDS[w]) zone = ZONE_WORDS[w];
+      if (count === null && NUM[w] !== undefined) count = NUM[w];
+      if (count === null && (w === 'to' || w === 'too') && ZONE_WORDS[words[i + 1]]) count = 2;
+    });
+    const a = text.match(ACTION_RE);
+    let command = null;
+    if (/\b(cover me|on me|regroup|fall back|back to me)\b/.test(text)) command = 'regroup';
+    else if (/\bhold\b/.test(text)) command = 'hold';
+    else if (/\breload/.test(text)) command = 'reload';
+    else if (/\b(status|sitrep)\b/.test(text)) command = 'status';
+    else if (/\b(copy|roger|copied)\b/.test(text)) command = 'copy';
+    return { name, zone, count, action: a ? a[1] : null, command, contact: CONTACT_RE.test(text), text };
+  }
+  const parseUtterance = raw => splitSegments(raw).map(parseSegment);
+  window.parseUtterance = parseUtterance;
+
+  // ---------- state ----------
+  let S = null;
+  function freshState() {
+    bots.forEach(b => { b.x = b.home.x; b.y = b.home.y; b.cd = 0; b.task = null; b.mode = 'home'; });
+    return { running: false, t: 0, hp: 100, score: 0, groups: [], shots: [], flashes: [], nextSpawn: 1.2,
+      stats: { callouts: [], missedCombo: 0, lockedShots: 0, wrong: 0, unclear: 0, vague: 0, multi: 0, named: 0, groupsTotal: 0, groupsCalled: 0, kills: 0 } };
+  }
+  const rand = (a, b) => a + Math.random() * (b - a);
+  function spawnGroup() {
+    const busy = new Set(S.groups.filter(g => g.enemies.length).map(g => g.zone));
+    const free = Object.keys(ZONES).filter(z => !busy.has(z));
+    if (!free.length) return;
+    const zone = free[Math.floor(Math.random() * free.length)];
+    const count = 1 + Math.floor(Math.random() * 3);
+    const Z = ZONES[zone], enemies = [];
+    for (let i = 0; i < count; i++) {
+      let p, tries = 0;
+      do { p = { x: rand(Z.x0 + .03, Z.x1 - .03), y: rand(Z.y0 + .03, Z.y1 - .03) }; tries++; }
+      while (tries < 20 && enemies.some(e => Math.hypot(e.x - p.x, e.y - p.y) < .07));
+      enemies.push({ x: p.x, y: p.y, hp: 2, fireCd: rand(D.first[0], D.first[1]) });
+    }
+    S.groups.push({ zone, count, spawnT: S.t, called: false, warned: false, enemies });
+    S.stats.groupsTotal++;
+  }
+
+  // ---------- comms out ----------
+  const logEl = document.getElementById('log');
+  function log(kind, who, msg) {
+    const li = document.createElement('li');
+    li.className = kind;
+    const w = document.createElement('span'); w.className = 'who'; w.textContent = who;
+    li.append(w, ' ' + msg);
+    logEl.prepend(li);
+    while (logEl.children.length > 7) logEl.lastChild.remove();
+  }
+  const voiceToggle = document.getElementById('voiceToggle');
+  let speakChain = Promise.resolve();
+  function speakOne(line, pitch) {
+    const Cap = window.Capacitor;
+    const TTS = Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.TextToSpeech;
+    if (TTS) return Promise.race([TTS.speak({ text: line, lang: 'en-US', rate: 1.2, pitch }).catch(() => {}), sleep(5000)]);
+    if (!('speechSynthesis' in window)) return Promise.resolve();
+    return new Promise(res => {
+      try {
+        const u = new SpeechSynthesisUtterance(line); u.rate = 1.2; u.pitch = pitch;
+        u.onend = res; u.onerror = res; speechSynthesis.speak(u); setTimeout(res, 5000);
+      } catch (e) { res(); }
+    });
+  }
+  // Replies from one utterance are batched into a single short spoken line, so the open mic is paused as briefly as possible.
+  let batch = null;
+  function say(bot, line) {
+    log('bot', bot.name.toUpperCase(), line);
+    if (batch) { batch.push({ bot, line }); return; }
+    if (!voiceToggle.checked) return;
+    speakChain = speakChain.then(() => speakOne(line, bot.pitch));
+  }
+  function flushSpeech(list) {
+    if (!list.length || !voiceToggle.checked) return;
+    const spoken = list.map((x, i) => i ? x.line.replace(/^Copy, /, '') : x.line).join(' ');
+    speakChain = speakChain.then(() => speakOne(spoken, list[0].bot.pitch));
+  }
+  const coach = msg => log('coach', 'COACH', msg);
+  const WORD = n => ({ 1: 'one', 2: 'two', 3: 'three', 4: 'four', many: 'multiple' })[n] || String(n);
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+  // ---------- comms in ----------
+  function pickBot(zone) {
+    const busy = b => b.task && b.task.enemies.length;
+    const owner = bots.find(b => b.zone === zone);
+    if (!busy(owner)) return owner;
+    return bots.find(b => !busy(b)) || owner;
+  }
+  function handleSegment(p, ctx) {
+    const named = p.name ? botById(p.name) : null;
+    const lead = named || botById('cole');
+    if (!p.zone) {
+      if (p.command === 'regroup') {
+        (named ? [named] : bots).forEach(b => { b.task = null; b.mode = 'home'; });
+        say(lead, named ? 'Coming to you.' : 'Squad, on you.'); if (named) S.stats.named++; return;
+      }
+      if (p.command === 'hold') { (named ? [named] : bots).forEach(b => { b.mode = 'hold'; }); say(lead, 'Holding here.'); if (named) S.stats.named++; return; }
+      if (p.command === 'reload') { say(lead, 'Covering your reload.'); return; }
+      if (p.command === 'status') {
+        const open = S.groups.filter(g => !g.called && g.enemies.length).map(g => g.zone);
+        say(lead, open.length ? `Uncalled contacts: ${open.join(' and ')}.` : 'All contacts called.'); return;
+      }
+      if (p.command === 'copy') return;
+      if (p.count !== null) { S.stats.vague++; say(lead, `${cap(WORD(p.count))} where?`); coach('A count needs a sector: "two left", not "two".'); return; }
+      if (p.contact) { S.stats.vague++; say(lead, 'Contact where?'); coach('Give the count and sector: "one right", not "contact".'); return; }
+      if (p.action) { S.stats.vague++; say(lead, `${cap(p.action.replace(/ing$/, ''))} where?`); coach('Orders need a place. Say where before what.'); return; }
+      if (named) { say(named, `${named.name} here.`); coach(`${named.name} is waiting for an order. Follow the name with a count and sector: "${named.name}, two left".`); return; }
+      S.stats.unclear++; say(lead, 'Say again?'); return;
+    }
+
+    const g = S.groups.find(x => x.zone === p.zone && !x.called && x.enemies.length);
+    if (!g) {
+      const live = S.groups.find(x => x.zone === p.zone && x.called && x.enemies.length);
+      if (live && named) { named.task = live; named.mode = 'task'; S.stats.named++; say(named, `Moving ${p.zone}.`); return; }
+      if (live) { say(live.bot || lead, `Already on ${p.zone}.`); return; }
+      S.stats.wrong++; S.score = Math.max(0, S.score - 25);
+      say(named || bots.find(b => b.zone === p.zone), `Negative, ${p.zone} is clear.`);
+      coach(`Nothing ${p.zone}. Only call what you see.`);
+      return;
+    }
+
+    g.called = true;
+    // Called-out enemies are suppressed: once the squad knows where they are, they fire less often.
+    g.enemies.forEach(e => { e.fireCd += 1.5; });
+    S.stats.groupsCalled++;
+    ctx.called++;
+    if (named) S.stats.named++;
+    const reaction = S.t - g.spawnT;
+    const hasCount = p.count !== null;
+    const countRight = p.count === g.count || (p.count === 'many' && g.count >= 2);
+    S.stats.callouts.push({ reaction, countRight, hasCount, hasAction: !!p.action });
+    S.score += 100 + Math.round(Math.max(0, 4 - reaction) * 50) + (countRight ? 50 : 0) + (p.action ? 50 : 0) + (named ? 25 : 0);
+
+    const bot = named || pickBot(p.zone);
+    bot.task = g; bot.mode = 'task'; g.bot = bot;
+    let line;
+    if (!hasCount) line = `Copy, ${WORD(g.count)} ${p.zone}. Count first.`;
+    else if (!countRight) line = `Correction, ${WORD(g.count)} ${p.zone}.`;
+    else line = `Copy, ${WORD(g.count)} ${p.zone}.` + (p.action && /flank/.test(p.action) ? ' Flanking.' : '');
+    if (reaction > 5.5) line += ' Call faster.';
+    say(bot, line);
+
+    if (!hasCount) coach(`You called "${p.zone}" with no count. Say "${WORD(g.count)} ${p.zone}" so the squad knows what they face.`);
+    else if (reaction > 5.5) coach(`That call took ${reaction.toFixed(1)} s. Call contacts the moment they appear.`);
+    else if (!p.action && Math.random() < .35) coach('Add the action so the squad knows the plan: "two left, engaging".');
+    if (!named && bot.zone !== p.zone) coach(`${bot.name} picked up ${p.zone} because ${p.zone}'s owner was busy. Assign by name to control who goes.`);
+  }
+  function handleUtterance(raw) {
+    const heard = document.getElementById('heard');
+    heard.textContent = 'Heard: ';
+    const em = document.createElement('em'); em.textContent = '"' + String(raw || '').trim() + '"'; heard.append(em);
+    const segs = parseUtterance(raw);
+    if (!segs.length) return;
+    log('you', 'YOU', String(raw).trim().toLowerCase());
+    if (!S.running) { log('sys', 'SYS', 'Press Start drill first.'); return; }
+    const ctx = { called: 0 };
+    batch = [];
+    try { segs.forEach(p => handleSegment(p, ctx)); }
+    finally { const list = batch; batch = null; flushSpeech(list); }
+    if (ctx.called >= 2) { S.stats.multi++; S.score += 75; coach(`${ctx.called} contacts in one call. That\u2019s squad-level comms.`); }
+    else if (ctx.called === 1) {
+      const other = S.groups.find(g => !g.called && g.enemies.length && S.t - g.spawnT > 1.5);
+      if (other) { S.stats.missedCombo++; coach(`${cap(other.zone)} was up too. Call both in one breath: "two left and one ${other.zone}".`); }
+    }
+  }
+
+  // ---------- canvas ----------
+  const cv = document.getElementById('cv'), ctx2 = cv.getContext('2d');
+  let W = 0, H = 0;
+  function resize() {
+    const r = cv.parentElement.getBoundingClientRect();
+    W = r.width; H = Math.min(Math.round(W), 560);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.height = H + 'px';
+    ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (!S || !S.running) draw();
+  }
+  const X = v => v * W, Y = v => v * H;
+  function drawLock(x, y) {
+    ctx2.strokeStyle = C.ink; ctx2.lineWidth = 1.5;
+    ctx2.beginPath(); ctx2.arc(x, y - 3, 3.2, Math.PI, 0); ctx2.stroke();
+    ctx2.fillStyle = C.ink; ctx2.fillRect(x - 4.5, y - 3, 9, 7);
+  }
+  function draw() {
+    const c = ctx2;
+    c.fillStyle = C.ground; c.fillRect(0, 0, W, H);
+    c.strokeStyle = C.grid; c.lineWidth = 1;
+    const step = W / 12;
+    for (let x = step; x < W; x += step) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); }
+    for (let y = step; y < H; y += step) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+    c.beginPath(); c.arc(X(PLAYER.x), Y(PLAYER.y), W * .42, Math.PI * 1.08, Math.PI * 1.92); c.stroke();
+    c.beginPath(); c.arc(X(PLAYER.x), Y(PLAYER.y), W * .7, Math.PI * 1.12, Math.PI * 1.88); c.stroke();
+    Object.values(ZONES).forEach(z => {
+      c.setLineDash([4, 6]); c.strokeStyle = C.line;
+      c.strokeRect(X(z.x0), Y(z.y0), X(z.x1 - z.x0), Y(z.y1 - z.y0));
+      c.setLineDash([]);
+      c.fillStyle = C.muted; c.font = `700 ${Math.max(11, W * .026)}px "Saira Condensed", sans-serif`;
+      c.textAlign = 'left'; c.fillText(z.label, X(z.x0) + 6, Y(z.y0) + 16);
+    });
+    c.fillStyle = C.line;
+    COVER.forEach(([x, y, w, h]) => c.fillRect(X(x), Y(y), X(w), Y(h)));
+    const now = S ? S.t : 0;
+    S && S.shots.forEach(s => {
+      c.globalAlpha = Math.max(0, 1 - (now - s.t) / .25); c.strokeStyle = s.c; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(X(s.x0), Y(s.y0)); c.lineTo(X(s.x1), Y(s.y1)); c.stroke(); c.globalAlpha = 1;
+    });
+    const r = Math.max(9, W * .022);
+    (S ? S.groups : []).forEach(g => g.enemies.forEach(e => {
+      const x = X(e.x), y = Y(e.y);
+      if (g.called) {
+        c.fillStyle = C.hostile; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+        c.strokeStyle = C.hostile; c.lineWidth = 1.5; c.beginPath(); c.arc(x, y, r + 6, 0, Math.PI * 2); c.stroke();
+        c.beginPath(); c.moveTo(x - r - 10, y); c.lineTo(x - r - 3, y); c.moveTo(x + r + 3, y); c.lineTo(x + r + 10, y); c.stroke();
+        if (e.hp < 2) { c.fillStyle = C.ground; c.beginPath(); c.arc(x, y, r * .45, 0, Math.PI * 2); c.fill(); }
+      } else {
+        c.fillStyle = C.locked; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+        c.setLineDash([3, 3]); c.strokeStyle = C.hostile; c.lineWidth = 1.2;
+        c.beginPath(); c.arc(x, y, r + 5, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+        drawLock(x, y + 1);
+      }
+    }));
+    bots.forEach(b => {
+      const x = X(b.x), y = Y(b.y);
+      c.fillStyle = C.teal; c.beginPath(); c.moveTo(x, y - 11); c.lineTo(x + 9, y + 7); c.lineTo(x - 9, y + 7); c.closePath(); c.fill();
+      c.fillStyle = C.muted; c.font = '500 11px "IBM Plex Mono", monospace'; c.textAlign = 'center';
+      c.fillText(b.name.toUpperCase(), x, y + 21);
+    });
+    const px = X(PLAYER.x), py = Y(PLAYER.y);
+    c.fillStyle = C.amber; c.beginPath(); c.moveTo(px, py - 14); c.lineTo(px + 12, py + 9); c.lineTo(px, py + 3); c.lineTo(px - 12, py + 9); c.closePath(); c.fill();
+    S && S.flashes.forEach(f => {
+      c.globalAlpha = Math.max(0, 1 - (now - f.t) / 1.1); c.fillStyle = f.c; c.font = '700 15px "Saira Condensed", sans-serif'; c.textAlign = 'center';
+      c.fillText(f.text, X(f.x), Y(f.y) - 18 - (now - f.t) * 14); c.globalAlpha = 1;
+    });
+    if (S && S.hitT && now - S.hitT < .15) { c.fillStyle = C.hostile; c.globalAlpha = .12; c.fillRect(0, 0, W, H); c.globalAlpha = 1; }
+  }
+
+  // ---------- simulation ----------
+  function killEnemy(g, e) { g.enemies.splice(g.enemies.indexOf(e), 1); S.stats.kills++; S.score += 25; }
+  function step(dt) {
+    S.t += dt;
+    if (S.t >= S.nextSpawn) {
+      if (S.groups.filter(g => g.enemies.length).length < D.max) spawnGroup();
+      S.nextSpawn = S.t + rand(D.gap[0], D.gap[1]);
+    }
+    S.groups.forEach(g => {
+      if (!g.called && !g.warned && g.enemies.length && S.t - g.spawnT > 6) { g.warned = true; log('sys', 'SYS', `Uncalled contact ${g.zone.toUpperCase()} is hitting you.`); }
+      g.enemies.forEach(e => {
+        e.fireCd -= dt;
+        if (e.fireCd <= 0) {
+          e.fireCd = g.called ? rand(4, 6) : rand(2.4, 3.8); S.hp -= D.dmg; S.hitT = S.t;
+          S.shots.push({ x0: e.x, y0: e.y, x1: PLAYER.x + rand(-.02, .02), y1: PLAYER.y, t: S.t, c: C.hostile });
+        }
+      });
+    });
+    bots.forEach(b => {
+      const g = b.task && b.task.enemies.length ? b.task : null;
+      if (!g && b.mode === 'task') b.mode = 'home';
+      const dest = g ? ZONES[g.zone].post : (b.mode === 'hold' ? { x: b.x, y: b.y } : b.home);
+      const d = Math.hypot(dest.x - b.x, dest.y - b.y), sp = .45 * dt;
+      if (d > .005) { b.x += (dest.x - b.x) / d * Math.min(sp, d); b.y += (dest.y - b.y) / d * Math.min(sp, d); }
+      b.cd -= dt;
+      if (g && d < .03 && b.cd <= 0) {
+        b.cd = 0.9;
+        const e = g.enemies[0];
+        S.shots.push({ x0: b.x, y0: b.y, x1: e.x, y1: e.y, t: S.t, c: C.teal });
+        if (--e.hp <= 0) killEnemy(g, e);
+      }
+    });
+    S.groups = S.groups.filter(g => g.enemies.length);
+    S.shots = S.shots.filter(s => S.t - s.t < .3);
+    S.flashes = S.flashes.filter(f => S.t - f.t < 1.1);
+    if (S.hp <= 0 || S.t >= ROUND) endRound();
+  }
+  let last = 0;
+  function loop(ts) {
+    if (!S.running) return;
+    const dt = Math.min(.05, (ts - (last || ts)) / 1000); last = ts;
+    step(dt); hud(); draw();
+    if (S.running) requestAnimationFrame(loop);
+  }
+  function hud() {
+    const hp = Math.max(0, S.hp), fill = document.getElementById('hpFill');
+    fill.style.width = hp + '%';
+    fill.style.background = hp > 50 ? 'var(--good)' : hp > 25 ? 'var(--amber)' : 'var(--hostile)';
+    document.getElementById('timeOut').textContent = Math.max(0, Math.ceil(ROUND - S.t));
+    document.getElementById('scoreOut').textContent = S.score;
+  }
+
+  // ---------- report card (pure scoring) ----------
+  function grade(st) {
+    const c = st.callouts, n = c.length;
+    const avg = n ? c.reduce((a, x) => a + x.reaction, 0) / n : null;
+    // Reaction is measured from spawn to the end of your sentence, so ~2 s is excellent once speaking time is included.
+    const speed = avg === null ? 0 : Math.min(1, Math.max(0, (5 - avg) / 3));
+    const countAcc = n ? c.filter(x => x.countRight).length / n : 0;
+    const complete = n ? c.filter(x => x.hasCount && x.hasAction).length / n : 0;
+    const coverage = st.groupsTotal ? st.groupsCalled / st.groupsTotal : 0;
+    const comp = Math.max(0, .35 * speed + .3 * countAcc + .15 * complete + .2 * coverage + .02 * Math.min(st.multi, 5) - .03 * (st.wrong + st.lockedShots) - .02 * st.vague);
+    const letter = comp >= .85 ? 'A' : comp >= .7 ? 'B' : comp >= .55 ? 'C' : comp >= .4 ? 'D' : 'F';
+    const weak = [
+      [coverage, 'Some contacts were never called. Scan all three sectors and call the moment you see one.'],
+      [countAcc, 'Say the count every time. "Two left" tells your squad far more than "left".'],
+      [speed, `Call first, aim second. Your average was ${avg === null ? '-' : avg.toFixed(1)} s; aim for under 2.5 s.`],
+      [complete, 'Add what you are doing: "two left, engaging" tells the squad the plan.']
+    ].sort((a, b) => a[0] - b[0]);
+    let tip = weak[0][1];
+    if (st.vague >= 2) tip = 'Several calls had no sector. Every count and order needs a place: "two left", "push right".';
+    if (st.lockedShots >= 3) tip = `You tried to shoot ${st.lockedShots} locked enemies. Callout before trigger.`;
+    if (!n) tip = 'No callouts landed. Start with "one left" and build from there.';
+    return { letter, avg, countAcc, complete, coverage, tip };
+  }
+  window.gradeRound = grade;
+
+  function endRound() {
+    S.running = false; draw(); hud();
+    if (mic.on) mic.set(false, true);
+    const r = grade(S.stats), pct = v => Math.round(v * 100) + '%';
+    const card = document.getElementById('card');
+    card.innerHTML = '';
+    const add = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; card.append(el); return el; };
+    add('h2', '', (S.hp <= 0 ? 'Squad down' : 'Drill complete') + ' \u00b7 ' + D.label);
+    add('div', 'grade', r.letter);
+    const dl = add('dl', 'stats');
+    [['Score', S.score], ['Contacts called', `${S.stats.groupsCalled} of ${S.stats.groupsTotal}`], ['Avg reaction', r.avg === null ? '-' : r.avg.toFixed(1) + ' s'],
+     ['Count accuracy', pct(r.countAcc)], ['Full callouts', pct(r.complete)], ['Multi-contact calls', S.stats.multi], ['Orders by name', S.stats.named],
+     ['Calls with no sector', S.stats.vague], ['Missed chances to combine', S.stats.missedCombo], ['Wrong sector calls', S.stats.wrong], ['Shots at locked', S.stats.lockedShots]]
+      .forEach(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd); });
+    add('p', 'tip', r.tip);
+    card.append(diffPicker());
+    const b = add('button', 'primary', 'Run it again'); b.type = 'button'; b.addEventListener('click', start);
+    document.getElementById('overlay').hidden = false;
+  }
+  function diffPicker() {
+    const wrap = document.createElement('div'); wrap.className = 'diff';
+    const row = document.createElement('div'); row.className = 'diff-row'; row.setAttribute('role', 'radiogroup'); row.setAttribute('aria-label', 'Difficulty');
+    const note = document.createElement('p'); note.className = 'diff-note';
+    Object.entries(DIFFS).forEach(([k, v]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = v.label;
+      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(k === diffKey)); b.setAttribute('aria-pressed', String(k === diffKey));
+      b.addEventListener('click', () => {
+        diffKey = k; D = DIFFS[k]; note.textContent = v.note;
+        try { localStorage.setItem('squadcallout.diff', k); } catch (e) {}
+        row.querySelectorAll('button').forEach(x => { const on = x === b; x.setAttribute('aria-checked', String(on)); x.setAttribute('aria-pressed', String(on)); });
+      });
+      row.append(b);
+    });
+    note.textContent = D.note;
+    wrap.append(row, note);
+    return wrap;
+  }
+  function start() {
+    S = freshState(); S.running = true; last = 0;
+    logEl.innerHTML = '';
+    log('sys', 'SYS', 'Drill live. Call contacts: count + sector.');
+    document.getElementById('overlay').hidden = true;
+    hud(); requestAnimationFrame(loop);
+    if (mic.wanted && !mic.on) mic.set(true);
+  }
+
+  // ---------- firing ----------
+  cv.addEventListener('pointerdown', ev => {
+    if (!S || !S.running) return;
+    const rect = cv.getBoundingClientRect();
+    const nx = (ev.clientX - rect.left) / rect.width, ny = (ev.clientY - rect.top) / rect.height;
+    let best = null, bd = .06;
+    S.groups.forEach(g => g.enemies.forEach(e => { const d = Math.hypot((e.x - nx) * W / H, e.y - ny); if (d < bd) { bd = d; best = { g, e }; } }));
+    if (!best) return;
+    if (!best.g.called) { S.stats.lockedShots++; S.flashes.push({ x: best.e.x, y: best.e.y, t: S.t, text: 'LOCKED - CALL IT', c: C.hostile }); return; }
+    S.shots.push({ x0: PLAYER.x, y0: PLAYER.y, x1: best.e.x, y1: best.e.y, t: S.t, c: C.amber });
+    if (--best.e.hp <= 0) { S.flashes.push({ x: best.e.x, y: best.e.y, t: S.t, text: '+25', c: C.amber }); killEnemy(best.g, best.e); }
+  });
+
+  // ---------- typed + pad ----------
+  document.getElementById('typeForm').addEventListener('submit', ev => {
+    ev.preventDefault();
+    const inp = document.getElementById('typeIn');
+    handleUtterance(inp.value); inp.value = '';
+  });
+  let padCount = 'two';
+  document.querySelectorAll('[data-count]').forEach(b => b.addEventListener('click', () => {
+    padCount = b.dataset.count;
+    document.querySelectorAll('[data-count]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+  document.querySelectorAll('[data-zone]').forEach(b => b.addEventListener('click', () => handleUtterance(`${padCount} ${b.dataset.zone}, engaging`)));
+
+  // ---------- open mic ----------
+  const talk = document.getElementById('talkBtn'), micStatus = document.getElementById('micStatus');
+  const status = t => { micStatus.textContent = t; };
+  const mic = { on: false, wanted: false, set: () => {} };
+  const paint = () => {
+    talk.classList.toggle('on', mic.on);
+    talk.setAttribute('aria-pressed', String(mic.on));
+    talk.innerHTML = mic.on ? 'MIC<br>ON' : 'MIC<br>OFF';
+  };
+  const Cap = window.Capacitor;
+  const NativeSR = Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.SpeechRecognition;
+  const WebSR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (NativeSR) {
+    // Installed app: Android listens for one phrase at a time, so loop it while the mic is on.
+    let looping = false, permOK = false;
+    const runLoop = async () => {
+      if (looping) return; looping = true;
+      while (mic.on) {
+        status('Listening... call contacts any time.');
+        try {
+          const r = await NativeSR.start({ language: 'en-US', maxResults: 1, partialResults: false, popup: false });
+          const said = r && r.matches && r.matches[0];
+          if (said && mic.on) {
+            handleUtterance(said);
+            status('Squad responding...');
+            await speakChain;
+          }
+        } catch (e) {
+          const m = String((e && e.message) || e || '').toLowerCase();
+          if (m.includes('permission')) { mic.on = false; mic.wanted = false; paint(); status('Microphone permission is off. Allow it in Settings > Apps > Squad Callout.'); break; }
+          await sleep(250);
+        }
+      }
+      looping = false;
+      if (!mic.on && !/permission/i.test(micStatus.textContent)) status('Mic off. Tap MIC to open it.');
+    };
+    mic.set = async (on, auto) => {
+      if (on && !permOK) {
+        try {
+          const st = await NativeSR.requestPermissions();
+          if (!st || st.speechRecognition !== 'granted') { status('Microphone permission is off. Allow it in Settings > Apps > Squad Callout.'); return; }
+          permOK = true;
+        } catch (e) { status('Couldn\u2019t ask for the microphone. Check the app\u2019s permissions in Settings.'); return; }
+      }
+      mic.on = on; if (!auto) mic.wanted = on; paint();
+      if (on) runLoop(); else { try { await NativeSR.stop(); } catch (e) {} }
+    };
+  } else if (WebSR && window.isSecureContext) {
+    const rec = new WebSR();
+    rec.lang = 'en-US'; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
+    rec.onresult = ev => {
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const t = ev.results[i][0].transcript;
+        if (ev.results[i].isFinal) handleUtterance(t);
+        else document.getElementById('heard').textContent = 'Hearing: ' + t;
+      }
+    };
+    rec.onerror = ev => {
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed' || ev.error === 'audio-capture') {
+        mic.on = false; mic.wanted = false; paint();
+        status('The browser blocked the mic for this page. Allow Microphone in the site permissions, then reload.');
+      }
+    };
+    rec.onend = () => { if (mic.on) setTimeout(() => { try { rec.start(); } catch (e) {} }, 200); };
+    mic.set = async (on, auto) => {
+      if (on) {
+        try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t => t.stop()); }
+        catch (e) { status('The browser blocked the mic for this page. Allow Microphone in the site permissions, then reload.'); return; }
+      }
+      mic.on = on; if (!auto) mic.wanted = on; paint();
+      if (on) { try { rec.start(); } catch (e) {} status('Listening... call contacts any time.'); }
+      else { try { rec.stop(); } catch (e) {} status('Mic off. Tap MIC to open it.'); }
+    };
+  } else {
+    talk.disabled = true;
+    status('Voice isn\u2019t available here. Use the callout pad or type, or install the app for voice.');
+  }
+  talk.addEventListener('click', () => mic.set(!mic.on));
+
+  // ---------- boot ----------
+  document.getElementById('startBtn').addEventListener('click', start);
+  document.getElementById('startBtn').before(diffPicker());
+  S = freshState();
+  S.groups = [
+    { zone: 'left', count: 2, spawnT: 0, called: false, enemies: [{ x: .14, y: .30, hp: 2, fireCd: 9 }, { x: .23, y: .44, hp: 2, fireCd: 9 }] },
+    { zone: 'front', count: 1, spawnT: 0, called: true, enemies: [{ x: .52, y: .2, hp: 2, fireCd: 9 }] }
+  ];
+  window.addEventListener('resize', resize);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+  resize();
+})();
+</script>
