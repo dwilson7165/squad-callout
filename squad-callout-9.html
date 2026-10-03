@@ -1,0 +1,1261 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Squad Callout Drill</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one tactical column &mdash; HUD strip, radar field, comms console below. Single committed dark "night-ops" look. */
+:root {
+  color-scheme: dark;
+  --ground: #0f1519;
+  --panel: #161f25;
+  --line: #26343d;
+  --grid: #1c2830;
+  --ink: #e4ebe8;
+  --muted: #8b9ea4;
+  --amber: #f0a83a;
+  --teal: #4fc2b4;
+  --hostile: #e8625a;
+  --locked: #6d4a4a;
+  --good: #6fcf8a;
+  --display: "Saira Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--ground); color: var(--ink); }
+body { font-family: var(--body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 560px; margin: 0 auto; padding-block: 16px 32px; padding-inline: 16px; display: flex; flex-direction: column; gap: 12px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--display); font-weight: 800; font-size: 30px; letter-spacing: .04em; text-transform: uppercase; margin: 0; line-height: 1; }
+h1 span { color: var(--amber); }
+.tag { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.hud { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.hp { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hp-bar { flex: 1; height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+.hp-fill { height: 100%; width: 100%; background: var(--good); transition: width .2s, background .2s; }
+.hud b { color: var(--amber); font-weight: 500; }
+.field { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--ground); }
+canvas { display: block; width: 100%; touch-action: manipulation; cursor: crosshair; }
+.overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: color-mix(in srgb, var(--ground) 78%, transparent); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; max-width: 400px; width: 100%; display: flex; flex-direction: column; gap: 10px; max-height: 100%; overflow-y: auto; }
+.card h2 { font-family: var(--display); font-size: 24px; text-transform: uppercase; letter-spacing: .05em; margin: 0; text-wrap: balance; }
+.card p { margin: 0; color: var(--muted); font-size: 14px; }
+.card p strong { color: var(--ink); font-weight: 600; }
+.example { font-family: var(--mono); color: var(--amber); font-size: 14px; }
+.grade { font-family: var(--display); font-size: 64px; font-weight: 800; line-height: 1; color: var(--amber); }
+.stats { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.stats dt { color: var(--muted); }
+.stats dd { margin: 0; font-family: var(--mono); text-align: right; }
+.tip { border-left: 3px solid var(--amber); padding-left: 10px; color: var(--ink) !important; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.primary { background: var(--amber); color: #1a1206; border: 0; border-radius: 8px; padding: 12px 16px; font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: .08em; text-transform: uppercase; }
+.heard { font-family: var(--mono); font-size: 13px; color: var(--muted); min-height: 1.4em; overflow-wrap: anywhere; }
+.heard em { color: var(--amber); font-style: normal; }
+.console { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: stretch; }
+.talk { width: 92px; min-height: 92px; border-radius: 50%; border: 2px solid var(--amber); background: transparent; font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: .1em; color: var(--amber); user-select: none; -webkit-user-select: none; touch-action: none; align-self: center; }
+.talk.live { background: var(--amber); color: #1a1206; }
+.talk:disabled { opacity: .35; cursor: not-allowed; }
+.side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.mic-status { font-size: 12px; color: var(--muted); }
+form { display: flex; gap: 8px; }
+input[type=text] { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); padding: 10px 12px; font-family: var(--mono); font-size: 14px; }
+.send { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 0 14px; }
+.pad { display: flex; flex-direction: column; gap: 6px; }
+.pad-label { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.chip { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 4px; font-family: var(--display); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 15px; }
+.chip[aria-pressed="true"] { border-color: var(--amber); color: var(--amber); }
+.toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.log { list-style: none; margin: 0; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; font-family: var(--mono); font-size: 13px; display: flex; flex-direction: column; gap: 4px; min-height: 120px; }
+.log li { overflow-wrap: anywhere; }
+.log .who { display: inline-block; min-width: 4.5em; letter-spacing: .06em; }
+.log .you .who { color: var(--amber); }
+.log .bot .who { color: var(--teal); }
+.log .sys .who { color: var(--hostile); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+@media (max-width: 420px) { .talk { width: 78px; min-height: 78px; font-size: 15px; } h1 { font-size: 26px; } }
+@media (prefers-reduced-motion: reduce) { .hp-fill { transition: none; } }
+.roster { font-size: 13px; color: var(--muted); }
+.roster b { color: var(--teal); font-family: var(--display); letter-spacing: .08em; font-size: 15px; }
+.talk.on { background: var(--amber); color: #1a1206; }
+.talk.busy { border-style: dashed; }
+.log .coach .who { color: var(--good); }
+.diff { display: flex; flex-direction: column; gap: 6px; }
+.diff-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.diff-note { font-size: 13px !important; min-height: 1.4em; }
+.hud { grid-template-columns: 1fr auto auto auto; }
+.pause-btn { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-family: var(--display); font-weight: 700; letter-spacing: .08em; font-size: 14px; }
+.pause-btn:disabled { opacity: .4; cursor: default; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn-row .primary { flex: 1 1 160px; }
+.secondary { flex: 1 1 140px; background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 11px 14px; font-family: var(--display); font-weight: 700; font-size: 16px; letter-spacing: .08em; text-transform: uppercase; }
+.save-note { font-family: var(--mono); font-size: 12px !important; color: var(--muted); }
+.row4 { grid-template-columns: repeat(4, 1fr) !important; }
+.hud { grid-template-columns: 1fr auto auto auto auto; }
+.field { background: #1d2124; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Squad <span>Callout</span></h1>
+    <div class="tag">Drill &middot; prototype 0.9</div>
+  </header>
+
+  <div class="hud" aria-live="polite">
+    <div class="hp"><span>HP</span><div class="hp-bar"><div class="hp-fill" id="hpFill"></div></div></div>
+    <div>WAVE <b id="waveOut">1/6</b></div>
+    <div>PTS <b id="scoreOut">0</b></div>
+    <button class="pause-btn" id="restartBtn" type="button" aria-label="Restart this wave" title="Restart this wave" disabled>&#8635;</button>
+    <button class="pause-btn" id="pauseBtn" type="button" aria-label="Pause" disabled>II</button>
+  </div>
+
+  <div class="field">
+    <canvas id="cv" aria-label="Top-down street intersection. Hostiles come from the left, front and right."></canvas>
+    <div class="overlay" id="overlay">
+      <div class="card" id="card"></div>
+    </div>
+  </div>
+
+  <div class="roster">Squad: <b>ACE</b> holds left &middot; <b>COLE</b> holds front &middot; <b>BRICK</b> holds right. Send any of them anywhere: "Ace and Brick, four left" or "squad, front".</div>
+
+  <div class="heard" id="heard">Heard: &mdash;</div>
+
+  <div class="console">
+    <button class="talk" id="talkBtn" type="button" aria-pressed="false" aria-label="Microphone on or off">MIC<br>OFF</button>
+    <div class="side">
+      <div class="mic-status" id="micStatus">Tap MIC once. It stays open until you tap it again.</div>
+      <form id="typeForm">
+        <input type="text" id="typeIn" placeholder="or type: ace and brick four left" autocomplete="off" aria-label="Type a callout">
+        <button class="send" type="submit">Call</button>
+      </form>
+      <label class="toggle"><input type="checkbox" id="voiceToggle" checked> Squad talks back</label>
+    </div>
+  </div>
+
+  <div class="pad" aria-label="Callout pad">
+    <div class="pad-label">Callout pad &middot; pick a count or one shot, then a sector</div>
+    <div class="row row4">
+      <button class="chip" type="button" data-count="two" aria-pressed="true">Two</button>
+      <button class="chip" type="button" data-count="three" aria-pressed="false">Three</button>
+      <button class="chip" type="button" data-count="four" aria-pressed="false">Four</button>
+      <button class="chip" type="button" data-count="oneshot" aria-pressed="false">1 Shot</button>
+    </div>
+    <div class="row">
+      <button class="chip" type="button" data-zone="left">Left</button>
+      <button class="chip" type="button" data-zone="front">Front</button>
+      <button class="chip" type="button" data-zone="right">Right</button>
+    </div>
+  </div>
+
+  <ul class="log" id="log" aria-live="polite"></ul>
+</div>
+
+<script>
+(() => {
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const C = { ground: css('--ground'), grid: css('--grid'), line: css('--line'), ink: css('--ink'), muted: css('--muted'), amber: css('--amber'), teal: css('--teal'), hostile: css('--hostile'), locked: css('--locked'), good: css('--good'), panel: css('--panel') };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- setup ----------
+  const WAVES = 6;
+  const MAX_HP = 3;
+  const BOT_HP = 60;
+  // The map is a street intersection: hostiles come down the left, front (north) and right streets.
+  const ZONES = {
+    left:  { x0: .04, x1: .28, y0: .18, y1: .54, label: 'LEFT',  post: { x: .34, y: .64 } },
+    front: { x0: .36, x1: .64, y0: .03, y1: .30, label: 'FRONT', post: { x: .50, y: .50 } },
+    right: { x0: .72, x1: .96, y0: .18, y1: .54, label: 'RIGHT', post: { x: .66, y: .64 } }
+  };
+  const DIFFS = {
+    recruit: { label: 'Recruit', note: 'Slower hostiles, lighter hits, longer to heal. Learn the calls.', dmg: 2, first: [5, 6.5], gap: [5, 7], max: 2, heal: 8, tough: .12 },
+    regular: { label: 'Regular', note: 'Standard pace.', dmg: 3, first: [3.5, 5], gap: [3.5, 6], max: 2, heal: 6.5, tough: .2 },
+    veteran: { label: 'Veteran', note: 'Faster shots, quicker heals, more hostiles at once.', dmg: 3, first: [2.5, 3.5], gap: [2.5, 4.5], max: 3, heal: 5, tough: .3 }
+  };
+  let diffKey = 'regular';
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+    del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  };
+  if (DIFFS[store.get('squadcallout.diff')]) diffKey = store.get('squadcallout.diff');
+  let D = DIFFS[diffKey];
+  const PLAYER = { x: .5, y: .88 };
+  // Wave scaling: bigger groups and more of them at once as waves go on.
+  const waveCfg = n => ({ groups: 3 + n, maxCount: Math.min(5, 2 + Math.floor(n / 2)), maxLive: Math.min(3, D.max + (n >= 5 ? 1 : 0)) });
+
+  // ---------- squad ----------
+  const bots = [
+    { id: 'ace',   name: 'Ace',   zone: 'left',  home: { x: .40, y: .79 }, pitch: 1.15, slot: -1 },
+    { id: 'cole',  name: 'Cole',  zone: 'front', home: { x: .50, y: .70 }, pitch: 0.95, slot: 0 },
+    { id: 'brick', name: 'Brick', zone: 'right', home: { x: .60, y: .79 }, pitch: 0.75, slot: 1 }
+  ];
+  const botById = id => bots.find(b => b.id === id);
+  const isDown = b => b.downUntil > (S ? S.t : 0);
+
+  // ---------- parser (pure) ----------
+  // Includes common speech-recognition mishearings ("Lyft" for left, "write" for right, "tree" for three).
+  const NAMES = { ace: 'ace', ase: 'ace', aice: 'ace', aces: 'ace', ice: 'ace', cole: 'cole', coal: 'cole', kohl: 'cole', col: 'cole', coll: 'cole', koal: 'cole', call: 'cole', cold: 'cole', brick: 'brick', bric: 'brick', brik: 'brick', bricks: 'brick', rick: 'brick', brig: 'brick' };
+  const ALL_WORDS = new Set(['squad', 'everyone', 'everybody', 'team', 'all', 'yall']);
+  const NUM = { one:1, won:1, single:1, solo:1, '1':1, two:2, couple:2, pair:2, '2':2, tue:2, three:3, tree:3, free:3, '3':3, four:4, '4':4, five:5, '5':5, fife:5, multiple:'many', several:'many', group:'many', many:'many', bunch:'many' };
+  const ZONE_WORDS = { left:'left', lift:'left', lyft:'left', lef:'left', leff:'left', laughed:'left', lefts:'left', right:'right', write:'right', rite:'right', wright:'right', riot:'right', rights:'right', bright:'right', front:'front', fronts:'front', frunt:'front', ahead:'front', forward:'front', center:'front', centre:'front', middle:'front', top:'front', north:'front' };
+  const SEPS = new Set(['and', 'then', 'also', 'plus', 'next']);
+  const ACTION_RE = /\b(engag\w*|gauging|push\w*|flank\w*|attack\w*|rush\w*|fir(e|ing)|shoot\w*|taking|take|clear\w*)\b/;
+  const CONTACT_RE = /\b(contact|contacts|enemy|enemies|hostile|hostiles|tango|tangos|mutant|mutants)\b/;
+  // "One shot" and the slang players use for a hostile at 1 HP.
+  const SHOT_W = /^(shots?|shut|shop|shout|shoot)$/;
+  const ONESHOT_RE = /\b(one|1|won|want|wan) ?(shots?|shut|shop|shout|shoot)\b|\boneshot\b|\bcracked\b|\blit\b|\bweak\b|\blow\b|\bone hp\b|\bfinish (him|them|it)\b/;
+  const isNameWord = w => !!NAMES[w] || ALL_WORDS.has(w);
+
+  function isCountAt(words, i) {
+    const w = words[i];
+    if (/^(one|1|won|want|wan)$/.test(w) && SHOT_W.test(words[i + 1] || '')) return false;
+    if (NUM[w] !== undefined) return true;
+    if ((w === 'to' || w === 'too') && ZONE_WORDS[words[i + 1]]) return true;
+    return (w === 'for' || w === 'fore') && !!ZONE_WORDS[words[i + 1]];
+  }
+  function splitSegments(text) {
+    const words = String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+    const segs = []; let cur = [], hasZone = false;
+    const flush = () => { if (cur.length) segs.push(cur); cur = []; hasZone = false; };
+    words.forEach((w, i) => {
+      if (SEPS.has(w)) { flush(); return; }
+      const shotStart = /^(one|1|won|want|wan)$/.test(w) && SHOT_W.test(words[i + 1] || '');
+      const isName = isNameWord(w), isCount = isCountAt(words, i) || shotStart, isZone = !!ZONE_WORDS[w];
+      if (cur.length && ((isName && hasZone) || (isCount && hasZone) || (isZone && hasZone))) flush();
+      cur.push(w);
+      if (isZone) hasZone = true;
+    });
+    flush();
+    return segs;
+  }
+  function parseSegment(words) {
+    const text = words.join(' ');
+    const oneShot = ONESHOT_RE.test(text);
+    let zone = null, count = null, all = false;
+    const names = [];
+    words.forEach((w, i) => {
+      if (NAMES[w] && !names.includes(NAMES[w])) names.push(NAMES[w]);
+      if (ALL_WORDS.has(w)) all = true;
+      if (!zone && ZONE_WORDS[w]) zone = ZONE_WORDS[w];
+      if (!oneShot && count === null && NUM[w] !== undefined) count = NUM[w];
+      if (!oneShot && count === null && (w === 'to' || w === 'too') && ZONE_WORDS[words[i + 1]]) count = 2;
+      if (!oneShot && count === null && (w === 'for' || w === 'fore') && ZONE_WORDS[words[i + 1]]) count = 4;
+    });
+    const a = text.match(ACTION_RE);
+    let command = null;
+    if (/\b(cover me|on me|regroup|fall back|back to me)\b/.test(text)) command = 'regroup';
+    else if (/\bhold\b/.test(text)) command = 'hold';
+    else if (/\breload/.test(text)) command = 'reload';
+    else if (/\b(status|sitrep)\b/.test(text)) command = 'status';
+    else if (/\b(copy|roger|copied)\b/.test(text)) command = 'copy';
+    return { names, all, name: names[0] || null, zone, count, action: a && !oneShot ? a[1] : null, command, contact: CONTACT_RE.test(text), oneShot, text };
+  }
+  const namesOnly = p => (p.names.length || p.all) && !p.zone && p.count === null && !p.oneShot && !p.command && !p.action && !p.contact;
+  function parseUtterance(raw) {
+    const out = [];
+    splitSegments(raw).map(parseSegment).forEach(p => {
+      const prev = out[out.length - 1];
+      // "Ace and Brick, four left" -> one order for both.
+      if (prev && namesOnly(prev) && !namesOnly(p)) { p.names = [...prev.names, ...p.names.filter(n => !prev.names.includes(n))]; p.all = p.all || prev.all; p.name = p.names[0] || null; p.text = prev.text + ' ' + p.text; out[out.length - 1] = p; return; }
+      // "Ace" then "and Brick" before the order -> keep collecting names.
+      if (prev && namesOnly(prev) && namesOnly(p)) { prev.names.push(...p.names.filter(n => !prev.names.includes(n))); prev.all = prev.all || p.all; prev.text += ' ' + p.text; return; }
+      // "left, one shot" -> one call.
+      if (prev && p.oneShot && !p.zone && !p.names.length && prev.zone && prev.count === null && !prev.oneShot) { prev.oneShot = true; prev.text += ' ' + p.text; return; }
+      // "one shot front, Brick" / "four left, squad" -> the trailing names own the previous call.
+      if (prev && namesOnly(p) && prev.zone && !prev.names.length && !prev.all) { prev.names = p.names; prev.all = p.all; prev.name = p.names[0] || null; prev.text += ' ' + p.text; return; }
+      out.push(p);
+    });
+    return out;
+  }
+  window.parseUtterance = parseUtterance;
+
+  // ---------- state ----------
+  let S = null;
+  const newStats = () => ({ callouts: [], missedCombo: 0, lockedShots: 0, wrong: 0, unclear: 0, vague: 0, multi: 0, named: 0, stacked: 0, groupsTotal: 0, groupsCalled: 0, kills: 0, oneShotCalls: 0, oneShotEscapes: 0, oneShotSeen: 0, wavesPlayed: 0, waveBonus: 0, flawless: 0, botsDowned: 0 });
+  function freshState(from) {
+    bots.forEach(b => { b.x = b.home.x; b.y = b.home.y; b.cd = 0; b.task = null; b.mode = 'home'; b.flash = -9; b.hp = BOT_HP; b.downUntil = -1; b.hitAt = -9; });
+    return { running: false, paused: false, over: false, won: false, t: 0, hp: from ? from.hp : 100, score: from ? from.score : 0,
+      wave: 0, toSpawn: 0, phase: 'brief', phaseEnd: 0, banner: '', bannerSub: '', bannerAt: -9, groups: [], shots: [], flashes: [], sparks: [], nextSpawn: 0,
+      waveDmg: 0, waveUncalledHits: 0, waveCleared: 0, waveTotal: 0, nextWaveAt: 0, calls: [],
+      taughtOneShot: false, taughtStack: false, stats: from ? from.stats : newStats() };
+  }
+  const SAVE_KEY = 'squadcallout.save';
+  function saveGame() {
+    store.set(SAVE_KEY, JSON.stringify({ v: 1, diff: diffKey, wave: S.wave, hp: S.hp, score: S.score, stats: S.stats, at: Date.now() }));
+  }
+  function loadSave() {
+    try { const s = JSON.parse(store.get(SAVE_KEY) || 'null'); return s && s.v === 1 && DIFFS[s.diff] && s.wave >= 1 && s.wave <= WAVES ? s : null; } catch (e) { return null; }
+  }
+
+  function startWave(n) {
+    const cfg = waveCfg(n);
+    S.wave = n; S.toSpawn = cfg.groups; S.waveTotal = cfg.groups; S.waveCleared = 0; S.waveDmg = 0; S.waveUncalledHits = 0;
+    S.stats.wavesPlayed = Math.max(S.stats.wavesPlayed || 0, n);
+    S.phase = 'intermission'; S.phaseEnd = S.t + (n === 1 ? 2 : 2.5);
+    S.banner = `WAVE ${n}`; S.bannerSub = `${cfg.groups} contacts incoming`; S.bannerAt = S.t;
+    bots.forEach(b => { if (!isDown(b)) b.hp = Math.min(BOT_HP, b.hp + 12); });
+    saveGame();
+    log('sys', 'SYS', `Wave ${n} of ${WAVES}: ${cfg.groups} contacts, groups up to ${cfg.maxCount}. Progress saved.`);
+  }
+  function clearWave() {
+    const bonus = 200 + 50 * S.wave + (S.waveDmg === 0 ? 150 : 0) + (S.waveUncalledHits === 0 ? 100 : 0);
+    S.score += bonus; S.stats.waveBonus += bonus;
+    if (S.waveDmg === 0) S.stats.flawless++;
+    const extras = [S.waveDmg === 0 ? 'flawless' : '', S.waveUncalledHits === 0 ? 'every contact called' : ''].filter(Boolean).join(', ');
+    log('sys', 'SYS', `Wave ${S.wave} cleared: +${bonus} pts${extras ? ' (' + extras + ')' : ''}. +25 HP.`);
+    S.hp = Math.min(100, S.hp + 25);
+    if (S.wave >= WAVES) {
+      const fin = 1000 + Math.round(S.hp) * 5;
+      S.score += fin; S.stats.waveBonus += fin;
+      S.won = true; endRun(); return;
+    }
+    S.banner = `WAVE ${S.wave} CLEAR`; S.bannerSub = `+${bonus} pts${extras ? ' \u00b7 ' + extras : ''}`; S.bannerAt = S.t;
+    S.phase = 'cleared'; S.nextWaveAt = S.t + 2.6;
+  }
+  function spawnGroup() {
+    const busy = new Set(S.groups.filter(g => g.enemies.length).map(g => g.zone));
+    const free = Object.keys(ZONES).filter(z => !busy.has(z));
+    if (!free.length) return false;
+    const zone = free[Math.floor(Math.random() * free.length)];
+    const cfg = waveCfg(S.wave);
+    const count = clamp(1 + Math.floor(Math.random() * cfg.maxCount), 1, cfg.maxCount);
+    const Z = ZONES[zone], enemies = [];
+    const toughP = Math.min(.45, D.tough + .03 * (S.wave - 1));
+    for (let i = 0; i < count; i++) {
+      let p, tries = 0;
+      do { p = { x: rand(Z.x0 + .03, Z.x1 - .03), y: rand(Z.y0 + .04, Z.y1 - .03) }; tries++; }
+      while (tries < 30 && enemies.some(e => Math.hypot(e.x - p.x, e.y - p.y) < .075));
+      enemies.push({ x: p.x, y: p.y, hp: MAX_HP, tough: Math.random() < toughP, ducked: false, duckAt: 0, hitAt: -9, wob: Math.random() * 6, fireCd: rand(D.first[0], D.first[1]) });
+    }
+    S.groups.push({ zone, count, spawnT: S.t, called: false, warned: false, bots: [], enemies });
+    S.stats.groupsTotal++;
+    return true;
+  }
+
+  // ---------- comms out ----------
+  const logEl = document.getElementById('log');
+  function log(kind, who, msg) {
+    const li = document.createElement('li');
+    li.className = kind;
+    const w = document.createElement('span'); w.className = 'who'; w.textContent = who;
+    li.append(w, ' ' + msg);
+    logEl.prepend(li);
+    while (logEl.children.length > 7) logEl.lastChild.remove();
+  }
+  const voiceToggle = document.getElementById('voiceToggle');
+  // Squad voice. A new reply cuts off the one playing (barge-in), and the mic keeps listening the whole time.
+  const recentSpoken = [];
+  const normWords = t => String(t || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+  const nativeTTS = () => { const Cap = window.Capacitor; return Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.TextToSpeech; };
+  function speakNow(line, pitch) {
+    recentSpoken.push({ words: normWords(line), at: Date.now() });
+    while (recentSpoken.length > 6) recentSpoken.shift();
+    const TTS = nativeTTS();
+    if (TTS) { TTS.stop().catch(() => {}).then(() => TTS.speak({ text: line, lang: 'en-US', rate: 1.25, pitch }).catch(() => {})); return; }
+    if (!('speechSynthesis' in window)) return;
+    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(line); u.rate = 1.25; u.pitch = pitch; speechSynthesis.speak(u); } catch (e) {}
+  }
+  // True when the mic most likely picked up the squad's own reply from the speaker.
+  function isEcho(raw) {
+    const w = normWords(raw);
+    if (w.length < 2) return false;
+    const now = Date.now();
+    return recentSpoken.some(r => {
+      if (now - r.at > 7000) return false;
+      const hit = w.filter(x => r.words.includes(x)).length;
+      return hit / w.length >= 0.7 || (w[0] === 'copy' && hit / w.length >= 0.5);
+    });
+  }
+  window.__isEcho = isEcho;
+  let batch = null;
+  function say(bot, line) {
+    log('bot', bot.name.toUpperCase(), line);
+    if (batch) { batch.push({ bot, line }); return; }
+    if (voiceToggle.checked) speakNow(line, bot.pitch);
+  }
+  function flushSpeech(list) {
+    if (!list.length || !voiceToggle.checked) return;
+    const spoken = list.map((x, i) => i ? x.line.replace(/^Copy, /, '') : x.line).join(' ');
+    speakNow(spoken, list[0].bot.pitch);
+  }
+  const coach = msg => log('coach', 'COACH', msg);
+  const WORD = n => ({ 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', many: 'multiple' })[n] || String(n);
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const joinNames = list => list.length < 2 ? list.map(b => b.name).join('') : list.slice(0, -1).map(b => b.name).join(', ') + ' and ' + list[list.length - 1].name;
+
+  // ---------- comms in ----------
+  const live = g => g.enemies.length > 0;
+  const busy = b => b.task && live(b.task);
+  function pickBot(zone) {
+    const owner = bots.find(b => b.zone === zone);
+    if (!isDown(owner) && !busy(owner)) return owner;
+    return bots.find(b => !isDown(b) && !busy(b)) || (!isDown(owner) ? owner : bots.find(b => !isDown(b))) || owner;
+  }
+  function assign(list, g) {
+    list.forEach(b => { b.task = g; b.mode = 'task'; if (!g.bots.includes(b)) g.bots.push(b); });
+  }
+  function botShoot(b, g, e, dmg) {
+    b.flash = S.t; b.aim = { x: e.x, y: e.y };
+    S.shots.push({ x0: b.x, y0: b.y, x1: e.x, y1: e.y, t: S.t, c: C.teal });
+    hitEnemy(g, e, dmg, b.x, b.y);
+  }
+  // Who an order is for: named squadmates, the whole squad, or nobody in particular.
+  function addressed(p) {
+    let list = p.all ? bots.slice() : p.names.map(botById);
+    const down = list.filter(isDown);
+    list = list.filter(b => !isDown(b));
+    return { list, down };
+  }
+  function handleOneShot(p, who) {
+    const ducked = [];
+    S.groups.forEach(g => g.enemies.forEach(e => { if (e.ducked && (!p.zone || g.zone === p.zone)) ducked.push({ g, e }); }));
+    const lead = who[0] || botById('cole');
+    if (!ducked.length) {
+      const lowVisible = [];
+      S.groups.forEach(g => { if (g.called && (!p.zone || g.zone === p.zone)) g.enemies.forEach(e => { if (e.hp === 1) lowVisible.push({ g, e }); }); });
+      if (lowVisible.length) {
+        const { g, e } = lowVisible[0];
+        const b = who[0] || g.bots.find(x => !isDown(x)) || pickBot(g.zone);
+        botShoot(b, g, e, 1); S.score += 25;
+        say(b, 'Got him.'); return;
+      }
+      say(lead, p.zone ? `No one-shot ${p.zone}.` : 'Where\u2019s the one-shot?');
+      if (!p.zone) S.stats.vague++;
+      return;
+    }
+    if (!p.zone && new Set(ducked.map(d => d.g.zone)).size > 1) {
+      S.stats.vague++;
+      say(lead, 'Which one? Give a sector.');
+      coach('Two hostiles are one-shot. Say which: "one shot left".');
+      return;
+    }
+    const { g, e } = ducked[0];
+    const b = who[0] || g.bots.find(x => !isDown(x)) || pickBot(g.zone);
+    if (who.length) S.stats.named++;
+    S.stats.oneShotCalls++;
+    S.score += 100 + (p.zone ? 25 : 0);
+    e.ducked = false;
+    botShoot(b, g, e, 1);
+    say(b, p.zone ? `Finishing ${g.zone}.` : 'On it.');
+    if (!p.zone) coach(`Good call. Add the sector next time: "one shot ${g.zone}".`);
+  }
+  function handleSegment(p, ctx) {
+    const { list: who, down } = addressed(p);
+    if (down.length && !who.length) { say(botById('cole').downUntil > S.t ? bots.find(b => !isDown(b)) || down[0] : botById('cole'), `${joinNames(down)} ${down.length > 1 ? 'are' : 'is'} down.`); return; }
+    const lead = who[0] || bots.find(b => !isDown(b)) || botById('cole');
+    if (p.oneShot) { handleOneShot(p, who); return; }
+    if (!p.zone) {
+      if (p.command === 'regroup') {
+        (who.length ? who : bots).forEach(b => { b.task = null; b.mode = 'home'; });
+        say(lead, who.length && !p.all ? 'Coming to you.' : 'Squad, on you.'); if (who.length) S.stats.named++; return;
+      }
+      if (p.command === 'hold') { (who.length ? who : bots).forEach(b => { b.mode = 'hold'; }); say(lead, 'Holding here.'); if (who.length) S.stats.named++; return; }
+      if (p.command === 'reload') { say(lead, 'Covering your reload.'); return; }
+      if (p.command === 'status') {
+        const open = S.groups.filter(g => !g.called && live(g)).map(g => g.zone);
+        say(lead, open.length ? `Uncalled: ${open.join(' and ')}.` : 'All contacts called.'); return;
+      }
+      if (p.command === 'copy') return;
+      if (p.count !== null) { S.stats.vague++; say(lead, `${cap(WORD(p.count))} where?`); coach('A count needs a sector: "two left", not "two".'); return; }
+      if (p.contact) { S.stats.vague++; say(lead, 'Contact where?'); coach('Give the count and sector: "one right", not "contact".'); return; }
+      if (p.action) { S.stats.vague++; say(lead, `${cap(p.action.replace(/ing$/, ''))} where?`); coach('Orders need a place. Say where before what.'); return; }
+      if (who.length) { say(who[0], who.length > 1 ? 'Standing by.' : `${who[0].name} here.`); coach(`Follow names with a count and sector: "${joinNames(who)}, two left".`); return; }
+      S.stats.unclear++; say(lead, 'Say again?'); return;
+    }
+
+    const g = S.groups.find(x => x.zone === p.zone && !x.called && live(x));
+    if (!g) {
+      const lv = S.groups.find(x => x.zone === p.zone && x.called && live(x));
+      if (lv && who.length) {
+        assign(who, lv); S.stats.named++; if (lv.bots.length > 1) S.stats.stacked++;
+        say(who[0], `${who.length > 1 || p.all ? 'Moving' : 'Moving'} ${p.zone}.`); return;
+      }
+      if (lv) { say(lv.bots[0] || lead, `Already on ${p.zone}.`); return; }
+      S.stats.wrong++; S.score = Math.max(0, S.score - 25);
+      say(who[0] || bots.find(b => b.zone === p.zone), `Negative, ${p.zone} is clear.`);
+      coach(`Nothing ${p.zone}. Only call what you see.`);
+      return;
+    }
+
+    g.called = true; g.calledAt = S.t;
+    // Called-out hostiles are suppressed: once the squad knows where they are, they fire less often.
+    g.enemies.forEach(e => { e.fireCd += 1.5; });
+    S.stats.groupsCalled++;
+    ctx.called++;
+    if (who.length) S.stats.named++;
+    const reaction = S.t - g.spawnT;
+    const hasCount = p.count !== null;
+    const countRight = p.count === g.count || (p.count === 'many' && g.count >= 2);
+    S.stats.callouts.push({ reaction, countRight, hasCount, hasAction: !!p.action });
+    S.score += 100 + Math.round(Math.max(0, 4 - reaction) * 50) + (countRight ? 50 : 0) + (p.action ? 50 : 0) + (who.length ? 25 : 0);
+
+    const team = who.length ? who : [pickBot(p.zone)];
+    assign(team, g);
+    if (team.length > 1) { S.stats.stacked++; S.score += 50; }
+    let line;
+    if (!hasCount) line = `Copy, ${WORD(g.count)} ${p.zone}. Count first.`;
+    else if (!countRight) line = `Correction, ${WORD(g.count)} ${p.zone}.`;
+    else line = `Copy, ${WORD(g.count)} ${p.zone}.` + (p.action && /flank/.test(p.action) ? ' Flanking.' : '');
+    if (team.length > 1) line += ` ${joinNames(team)} moving.`;
+    if (reaction > 5.5) line += ' Call faster.';
+    say(team[0], line);
+    if (down.length) coach(`${joinNames(down)} ${down.length > 1 ? 'are' : 'is'} down and couldn\u2019t go.`);
+
+    if (!hasCount) coach(`You called "${p.zone}" with no count. Say "${WORD(g.count)} ${p.zone}" so the squad knows what they face.`);
+    else if (reaction > 5.5) coach(`That call took ${reaction.toFixed(1)} s. Call contacts the moment they appear.`);
+    else if (g.count >= 4 && team.length === 1 && !S.taughtStack) { S.taughtStack = true; coach(`${cap(WORD(g.count))} is a lot for one. Send two: "${team[0].name} and ${bots.find(b => b !== team[0]).name}, ${WORD(g.count)} ${p.zone}".`); }
+    else if (!p.action && Math.random() < .3) coach('Add the action so the squad knows the plan: "two left, engaging".');
+    if (!who.length && team[0].zone !== p.zone) coach(`${team[0].name} picked up ${p.zone} because ${p.zone}'s owner was busy. Assign by name to control who goes.`);
+  }
+  function handleUtterance(raw, fromMic) {
+    if (fromMic && isEcho(raw)) { document.getElementById('heard').textContent = 'Ignored squad echo: "' + String(raw).trim() + '"'; return; }
+    const heard = document.getElementById('heard');
+    heard.textContent = 'Heard: ';
+    const em = document.createElement('em'); em.textContent = '"' + String(raw || '').trim() + '"'; heard.append(em);
+    const segs = parseUtterance(raw);
+    if (!segs.length) return;
+    log('you', 'YOU', String(raw).trim().toLowerCase());
+    if (!S.running || S.paused) { log('sys', 'SYS', S.paused ? 'Paused. Tap Resume first.' : 'Press Start drill first.'); return; }
+    S.calls.unshift(String(raw).trim().toLowerCase()); S.calls.length = Math.min(S.calls.length, 3);
+    const ctx = { called: 0 };
+    batch = [];
+    try { segs.forEach(p => handleSegment(p, ctx)); }
+    finally { const list = batch; batch = null; flushSpeech(list); }
+    if (ctx.called >= 2) { S.stats.multi++; S.score += 75; coach(`${ctx.called} contacts in one call. That\u2019s squad-level comms.`); }
+    else if (ctx.called === 1) {
+      const other = S.groups.find(g => !g.called && live(g) && S.t - g.spawnT > 1.5);
+      if (other) { S.stats.missedCombo++; coach(`${cap(other.zone)} was up too. Call both in one breath: "two left and one ${other.zone}".`); }
+    }
+  }
+
+  // ---------- combat ----------
+  function hitEnemy(g, e, dmg, fx, fy) {
+    e.hp -= dmg; e.hitAt = S.t;
+    for (let i = 0; i < 5; i++) S.sparks.push({ x: e.x, y: e.y, vx: (e.x - fx) * 2 + rand(-.25, .25), vy: (e.y - fy) * 2 + rand(-.25, .25), t: S.t });
+    if (e.hp <= 0) {
+      g.enemies.splice(g.enemies.indexOf(e), 1); S.stats.kills++; S.score += 25;
+      S.flashes.push({ x: e.x, y: e.y, t: S.t, text: '+25', c: C.amber });
+      if (!g.enemies.length) S.waveCleared++;
+      return;
+    }
+    if (e.tough && e.hp === 1 && !e.ducked) {
+      e.ducked = true; e.duckAt = S.t; S.stats.oneShotSeen++;
+      S.flashes.push({ x: e.x, y: e.y, t: S.t, text: 'ONE SHOT', c: C.hostile });
+      if (!S.taughtOneShot) { S.taughtOneShot = true; coach(`A hostile ${g.zone} ducked at 1 HP. Call "one shot ${g.zone}" before he heals.`); }
+    }
+  }
+  function hitBot(b, dmg) {
+    b.hp -= dmg; b.hitAt = S.t;
+    if (b.hp <= 0) {
+      b.hp = 0; b.downUntil = S.t + 6; b.task = null; b.mode = 'home'; S.stats.botsDowned++;
+      S.flashes.push({ x: b.x, y: b.y, t: S.t, text: `${b.name.toUpperCase()} DOWN`, c: C.hostile });
+      log('sys', 'SYS', `${b.name} is down for 6 s. Send someone else.`);
+    }
+  }
+
+  // ---------- scenery (drawn once per size into an offscreen canvas) ----------
+  const bgCanvas = document.createElement('canvas');
+  const bgCtx = bgCanvas.getContext('2d');
+  function seeded(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const ROAD_V = [.30, .70], ROAD_H = [.13, .58];
+  const BUILDINGS = [[0, 0, .30, .13], [.70, 0, 1, .13], [0, .58, .30, 1], [.70, .58, 1, 1]];
+  function drawScenery(c, W, H) {
+    const R = seeded(7);
+    const X = v => v * W, Y = v => v * H;
+    const rr = (x, y, w, h, r) => { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); };
+    // asphalt
+    c.fillStyle = '#2a2d30'; c.fillRect(0, 0, W, H);
+    for (let i = 0; i < 2200; i++) { const s = R(); c.fillStyle = s < .5 ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.035)'; c.fillRect(R() * W, R() * H, 1 + R() * 2, 1 + R() * 2); }
+    // patched asphalt
+    for (let i = 0; i < 7; i++) { c.fillStyle = 'rgba(0,0,0,.14)'; rr(X(.3 + R() * .4), Y(.15 + R() * .7), X(.05 + R() * .08), Y(.03 + R() * .05), 3); c.fill(); }
+    // sidewalks along every block edge
+    const SW = .028;
+    BUILDINGS.forEach(([x0, y0, x1, y1]) => {
+      c.fillStyle = '#3a3e41'; c.fillRect(X(x0 - (x0 > 0 ? SW : 0)), Y(y0 - (y0 > 0 ? SW : 0)), X(x1 - x0 + (x0 > 0 ? SW : 0) + (x1 < 1 ? SW : 0)), Y(y1 - y0 + (y0 > 0 ? SW : 0) + (y1 < 1 ? SW : 0)));
+    });
+    c.strokeStyle = 'rgba(0,0,0,.25)'; c.lineWidth = 1;
+    for (let i = 0; i < 40; i++) { const x = X(R()), y = Y(R()); c.beginPath(); c.moveTo(x, y); c.lineTo(x + 6, y); c.stroke(); }
+    // lane markings
+    c.setLineDash([X(.03), X(.03)]); c.strokeStyle = 'rgba(176,150,70,.45)'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(X(.5), 0); c.lineTo(X(.5), Y(ROAD_H[0])); c.moveTo(X(.5), Y(ROAD_H[1])); c.lineTo(X(.5), H); c.stroke();
+    c.beginPath(); c.moveTo(0, Y(.355)); c.lineTo(X(ROAD_V[0]), Y(.355)); c.moveTo(X(ROAD_V[1]), Y(.355)); c.lineTo(W, Y(.355)); c.stroke();
+    c.setLineDash([]);
+    // crosswalks
+    c.fillStyle = 'rgba(210,210,200,.16)';
+    for (let i = 0; i < 9; i++) { c.fillRect(X(.325 + i * .042), Y(ROAD_H[1] + .008), X(.016), Y(.045)); }
+    for (let i = 0; i < 9; i++) { c.fillRect(X(ROAD_V[0] - .055), Y(.17 + i * .042), X(.045), Y(.016)); c.fillRect(X(ROAD_V[1] + .01), Y(.17 + i * .042), X(.045), Y(.016)); }
+    // cracks
+    c.strokeStyle = 'rgba(12,13,14,.75)';
+    for (let i = 0; i < 26; i++) {
+      let x = X(.05 + R() * .9), y = Y(.12 + R() * .78); c.lineWidth = .8 + R() * 1.2;
+      c.beginPath(); c.moveTo(x, y);
+      for (let k = 0; k < 6; k++) { x += (R() - .5) * W * .06; y += (R() - .5) * H * .06; c.lineTo(x, y); }
+      c.stroke();
+    }
+    // rooftops: parapet, brick face toward the street, AC units, vents, gravel
+    BUILDINGS.forEach(([x0, y0, x1, y1], bi) => {
+      const bx = X(x0), by = Y(y0), bw = X(x1 - x0), bh = Y(y1 - y0);
+      c.fillStyle = '#4a3029'; c.fillRect(bx, by, bw, bh);
+      const inset = 7;
+      c.fillStyle = '#34383b'; c.fillRect(bx + (x0 > 0 ? inset : 0), by + (y0 > 0 ? inset : 0), bw - (x0 > 0 ? inset : 0) - (x1 < 1 ? inset : 0), bh - (y0 > 0 ? inset : 0) - (y1 < 1 ? inset : 0));
+      // brick mortar on the street faces
+      c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 1;
+      for (let k = 0; k < bw; k += 7) { if (y1 < 1) { c.beginPath(); c.moveTo(bx + k, by + bh - inset); c.lineTo(bx + k, by + bh); c.stroke(); } if (y0 > 0) { c.beginPath(); c.moveTo(bx + k, by); c.lineTo(bx + k, by + inset); c.stroke(); } }
+      for (let k = 0; k < bh; k += 7) { if (x1 < 1) { c.beginPath(); c.moveTo(bx + bw - inset, by + k); c.lineTo(bx + bw, by + k); c.stroke(); } if (x0 > 0) { c.beginPath(); c.moveTo(bx, by + k); c.lineTo(bx + inset, by + k); c.stroke(); } }
+      // parapet highlight
+      c.strokeStyle = 'rgba(255,255,255,.08)'; c.lineWidth = 2; c.strokeRect(bx + (x0 > 0 ? inset : 1), by + (y0 > 0 ? inset : 1), bw - (x0 > 0 ? inset : 1) - (x1 < 1 ? inset : 1), bh - (y0 > 0 ? inset : 1) - (y1 < 1 ? inset : 1));
+      // gravel
+      for (let k = 0; k < bw * bh / 60; k++) { c.fillStyle = R() < .5 ? 'rgba(0,0,0,.2)' : 'rgba(255,255,255,.05)'; c.fillRect(bx + R() * bw, by + R() * bh, 1.5, 1.5); }
+      // roof stains
+      for (let k = 0; k < 3; k++) { c.fillStyle = 'rgba(20,24,20,.25)'; c.beginPath(); c.ellipse(bx + R() * bw, by + R() * bh, 6 + R() * 18, 4 + R() * 10, R() * 3, 0, Math.PI * 2); c.fill(); }
+      // AC units on the big roofs, a vent row on the thin ones
+      const units = bh > H * .2 ? 2 : 1;
+      for (let k = 0; k < units; k++) {
+        const s = Math.min(bw, bh) * (bh > H * .2 ? .26 : .45);
+        const ux = bx + bw * (.25 + .45 * R()) - s / 2, uy = by + bh * (.25 + .5 * R()) - s / 2;
+        c.fillStyle = 'rgba(0,0,0,.4)'; c.fillRect(ux + 3, uy + 4, s, s);
+        c.fillStyle = '#5c6165'; c.fillRect(ux, uy, s, s);
+        c.strokeStyle = 'rgba(255,255,255,.12)'; c.strokeRect(ux + .5, uy + .5, s - 1, s - 1);
+        c.fillStyle = '#2e3235'; c.beginPath(); c.arc(ux + s / 2, uy + s / 2, s * .36, 0, Math.PI * 2); c.fill();
+        c.strokeStyle = '#6f7478'; c.lineWidth = 1.2;
+        for (let a = 0; a < 4; a++) { const an = a * Math.PI / 2 + .4; c.beginPath(); c.moveTo(ux + s / 2, uy + s / 2); c.lineTo(ux + s / 2 + Math.cos(an) * s * .32, uy + s / 2 + Math.sin(an) * s * .32); c.stroke(); }
+      }
+      for (let k = 0; k < 3; k++) { c.fillStyle = '#4a4f53'; c.beginPath(); c.arc(bx + bw * (.15 + R() * .7), by + bh * (.2 + R() * .6), 3 + R() * 2, 0, Math.PI * 2); c.fill(); }
+    });
+    // rubble and weeds along the curbs
+    for (let i = 0; i < 70; i++) {
+      const edge = BUILDINGS[Math.floor(R() * 4)];
+      const nearX = R() < .5, x = nearX ? (edge[0] > 0 ? edge[0] - R() * .06 : edge[2] + R() * .06) : edge[0] + R() * (edge[2] - edge[0]);
+      const y = nearX ? edge[1] + R() * (edge[3] - edge[1]) : (edge[1] > 0 ? edge[1] - R() * .06 : edge[3] + R() * .06);
+      const px = X(clamp(x, 0, 1)), py = Y(clamp(y, 0, 1)), s = 2 + R() * 4;
+      c.fillStyle = R() < .5 ? '#55504a' : '#45423f';
+      c.beginPath(); c.moveTo(px, py - s); c.lineTo(px + s, py - s * .2); c.lineTo(px + s * .4, py + s); c.lineTo(px - s * .8, py + s * .4); c.closePath(); c.fill();
+      if (R() < .25) { c.fillStyle = 'rgba(79,107,58,.7)'; for (let k = 0; k < 4; k++) c.fillRect(px + (R() - .5) * 8, py + (R() - .5) * 8, 2, 2); }
+    }
+    // wrecked car in the intersection (cover)
+    c.save(); c.translate(X(.42), Y(.42)); c.rotate(-.35);
+    const cw = X(.15), ch = Y(.07);
+    c.fillStyle = 'rgba(0,0,0,.45)'; rr(-cw / 2 + 4, -ch / 2 + 5, cw, ch, 6); c.fill();
+    const cg = c.createLinearGradient(0, -ch / 2, 0, ch / 2); cg.addColorStop(0, '#7d6a55'); cg.addColorStop(1, '#4b3e31');
+    c.fillStyle = cg; rr(-cw / 2, -ch / 2, cw, ch, 6); c.fill();
+    c.fillStyle = '#1d2124'; rr(-cw * .18, -ch * .38, cw * .42, ch * .76, 3); c.fill();
+    c.fillStyle = 'rgba(140,90,55,.6)'; for (let k = 0; k < 6; k++) { c.beginPath(); c.arc((R() - .5) * cw * .8, (R() - .5) * ch * .7, 2 + R() * 3, 0, Math.PI * 2); c.fill(); }
+    c.restore();
+    // barricades at the corners
+    [[.22, .66, .5], [.78, .66, -.5]].forEach(([x, y, a]) => {
+      c.save(); c.translate(X(x), Y(y)); c.rotate(a);
+      c.fillStyle = 'rgba(0,0,0,.4)'; c.fillRect(-X(.06) + 3, -3 + 4, X(.12), 6);
+      c.fillStyle = '#6d5a45'; c.fillRect(-X(.06), -3, X(.12), 6); c.rotate(.7); c.fillStyle = '#5d4c3a'; c.fillRect(-X(.05), -3, X(.1), 6);
+      c.restore();
+    });
+    // sandbags in front of you
+    for (let i = 0; i < 7; i++) {
+      const a = Math.PI * (1.15 + i * .1), x = X(PLAYER.x) + Math.cos(a) * X(.075), y = Y(PLAYER.y) + Math.sin(a) * Y(.075);
+      c.fillStyle = 'rgba(0,0,0,.35)'; c.beginPath(); c.ellipse(x + 2, y + 3, X(.022), Y(.014), a + Math.PI / 2, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#6e6650'; c.beginPath(); c.ellipse(x, y, X(.022), Y(.014), a + Math.PI / 2, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = 'rgba(0,0,0,.25)'; c.stroke();
+    }
+    // street sign
+    c.fillStyle = '#3f6a48'; c.fillRect(X(.29), Y(.585), X(.05), 4);
+    // vignette
+    const vg = c.createRadialGradient(W / 2, H / 2, W * .35, W / 2, H / 2, W * .78);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.45)');
+    c.fillStyle = vg; c.fillRect(0, 0, W, H);
+  }
+
+  // ---------- canvas ----------
+  const cv = document.getElementById('cv'), ctx2 = cv.getContext('2d');
+  let W = 0, H = 0, dprNow = 1;
+  function resize() {
+    const r = cv.parentElement.getBoundingClientRect();
+    W = r.width; H = Math.min(Math.round(W), 560);
+    dprNow = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(W * dprNow); cv.height = Math.round(H * dprNow); cv.style.height = H + 'px';
+    ctx2.setTransform(dprNow, 0, 0, dprNow, 0, 0);
+    bgCanvas.width = Math.round(W * dprNow); bgCanvas.height = Math.round(H * dprNow);
+    bgCtx.setTransform(dprNow, 0, 0, dprNow, 0, 0);
+    drawScenery(bgCtx, W, H);
+    if (!S || !S.running || S.paused) draw();
+  }
+  const X = v => v * W, Y = v => v * H;
+  const reduceMotion = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
+  const alpha = (hex, a) => { const h = hex.replace('#', ''); const n = parseInt(h.length === 3 ? h.split('').map(x => x + x).join('') : h, 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
+  const angleTo = (x0, y0, x1, y1) => Math.atan2(Y(y1) - Y(y0), X(x1) - X(x0));
+  function roundRect(x, y, w, h, r) {
+    const c = ctx2; c.beginPath();
+    c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+  }
+  function pill(text, x, y, fg, bg, size) {
+    const c = ctx2;
+    c.font = `600 ${size}px "IBM Plex Mono", monospace`;
+    const w = c.measureText(text).width + 10, h = size + 6;
+    c.fillStyle = bg; roundRect(x - w / 2, y - h / 2, w, h, h / 2); c.fill();
+    c.fillStyle = fg; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, x, y + .5); c.textBaseline = 'alphabetic';
+  }
+  function drawLock(x, y) {
+    const c = ctx2;
+    c.fillStyle = alpha(C.ground, .8); c.beginPath(); c.arc(x, y, 7, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = C.ink; c.lineWidth = 1.4;
+    c.beginPath(); c.arc(x, y - 2, 2.6, Math.PI, 0); c.stroke();
+    c.fillStyle = C.ink; c.fillRect(x - 3.5, y - 2, 7, 5.5);
+  }
+  function drawHealth(x, y, e, r) {
+    const c = ctx2, w = r * 2.6, gap = 2, seg = (w - gap * (MAX_HP - 1)) / MAX_HP, top = y - r - 14;
+    c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(x - w / 2 - 2, top - 2, w + 4, 8);
+    for (let i = 0; i < MAX_HP; i++) {
+      c.fillStyle = i < e.hp ? (e.hp === 1 ? C.hostile : '#e9e2d0') : 'rgba(255,255,255,.12)';
+      c.fillRect(x - w / 2 + i * (seg + gap), top, seg, 4);
+    }
+  }
+  // Helmeted soldier seen from above, facing +x before rotation.
+  function soldier(x, y, r, ang, band, hurt) {
+    const c = ctx2;
+    c.save(); c.translate(x, y); c.rotate(ang);
+    c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(2, 3, r * .95, r * 1.05, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#23292a'; c.fillRect(-r * 1.0, -r * .5, r * .55, r * 1.0);                       // backpack
+    c.fillStyle = hurt ? '#5a3f3a' : '#3b463a'; c.beginPath(); c.ellipse(-r * .05, 0, r * .62, r * .98, 0, 0, Math.PI * 2); c.fill(); // body armour
+    c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 1; c.stroke();
+    c.fillStyle = '#121416'; c.fillRect(r * .15, r * .18, r * 1.65, r * .24);                       // rifle
+    c.fillStyle = '#4a5642'; c.beginPath(); c.ellipse(r * .45, r * .3, r * .26, r * .2, 0, 0, Math.PI * 2); c.fill(); // forearm
+    c.fillStyle = '#56624c'; c.beginPath(); c.arc(r * .08, 0, r * .48, 0, Math.PI * 2); c.fill();   // helmet
+    c.fillStyle = 'rgba(255,255,255,.18)'; c.beginPath(); c.arc(r * .0, -r * .14, r * .22, 0, Math.PI * 2); c.fill();
+    c.fillStyle = band; c.fillRect(-r * .3, -r * .98, r * .4, r * .22);                              // team band
+    c.restore();
+  }
+  // Hunched mutant seen from above, reaching toward its target.
+  function mutant(x, y, r, ang, skin, dark, t, a) {
+    const c = ctx2;
+    c.save(); c.translate(x, y); c.rotate(ang); c.globalAlpha = a;
+    c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(2, 3, r * 1.05, r * .8, 0, 0, Math.PI * 2); c.fill();
+    const sway = reduceMotion ? 0 : Math.sin(t * 5) * r * .12;
+    c.strokeStyle = dark; c.lineCap = 'round'; c.lineWidth = r * .24;
+    c.beginPath(); c.moveTo(r * .2, -r * .45); c.lineTo(r * .95, -r * .85 + sway); c.lineTo(r * 1.35, -r * .55 + sway); c.stroke();
+    c.beginPath(); c.moveTo(r * .2, r * .45); c.lineTo(r * .95, r * .85 - sway); c.lineTo(r * 1.35, r * .55 - sway); c.stroke();
+    c.lineWidth = r * .2;
+    c.beginPath(); c.moveTo(-r * .45, -r * .4); c.lineTo(-r * 1.0, -r * .72 - sway); c.stroke();
+    c.beginPath(); c.moveTo(-r * .45, r * .4); c.lineTo(-r * 1.0, r * .72 + sway); c.stroke();
+    c.lineCap = 'butt';
+    c.fillStyle = skin; c.beginPath(); c.ellipse(0, 0, r * .85, r * .62, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = dark; c.lineWidth = 1.5; c.beginPath(); c.moveTo(-r * .6, 0); c.lineTo(r * .4, 0); c.stroke();
+    for (let k = -2; k <= 2; k++) { c.beginPath(); c.arc(k * r * .22, 0, r * .07, 0, Math.PI * 2); c.fillStyle = dark; c.fill(); }
+    c.fillStyle = dark; c.beginPath(); c.arc(r * .72, 0, r * .34, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#f0c060'; c.fillRect(r * .85, -r * .14, r * .1, r * .08); c.fillRect(r * .85, r * .06, r * .1, r * .08);
+    c.restore(); c.globalAlpha = 1;
+  }
+  function muzzle(x, y, ang, r, col) {
+    const c = ctx2, tx = x + Math.cos(ang) * r * 1.9, ty = y + Math.sin(ang) * r * 1.9;
+    const g = c.createRadialGradient(tx, ty, 0, tx, ty, r * .7);
+    g.addColorStop(0, 'rgba(255,240,200,1)'); g.addColorStop(.4, alpha(col, .9)); g.addColorStop(1, alpha(col, 0));
+    c.fillStyle = g; c.beginPath(); c.arc(tx, ty, r * .7, 0, Math.PI * 2); c.fill();
+  }
+  function panel(x, y, w, h, title) {
+    const c = ctx2;
+    c.fillStyle = 'rgba(12,15,17,.78)'; roundRect(x, y, w, h, 5); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,.1)'; c.lineWidth = 1; roundRect(x + .5, y + .5, w - 1, h - 1, 5); c.stroke();
+    c.fillStyle = C.muted; c.font = '600 9px "IBM Plex Mono", monospace'; c.textAlign = 'left';
+    c.fillText(title, x + 7, y + 12);
+  }
+  function hudPanels(now) {
+    const c = ctx2, pw = Math.min(132, W * .32), ph = 52;
+    // squad health / status
+    panel(4, 4, pw, ph, 'SQUAD');
+    bots.forEach((b, i) => {
+      const y = 21 + i * 11.5, down = isDown(b);
+      c.fillStyle = down ? C.hostile : C.teal; c.font = '700 9px "IBM Plex Mono", monospace'; c.textAlign = 'left';
+      c.fillText(b.name.toUpperCase(), 10, y + 4);
+      const bx = 46, bw = pw - 94;
+      c.fillStyle = 'rgba(255,255,255,.12)'; c.fillRect(bx, y - 1, bw, 4);
+      const hk = b.hp / BOT_HP; c.fillStyle = hk > .5 ? C.good : hk > .25 ? C.amber : C.hostile; c.fillRect(bx, y - 1, bw * hk, 4);
+      const st = down ? `DOWN ${Math.ceil(b.downUntil - now)}s` : b.task && live(b.task) ? b.task.zone.toUpperCase() : b.mode === 'hold' ? 'HOLD' : 'ON YOU';
+      c.fillStyle = down ? C.hostile : C.muted; c.font = '500 8px "IBM Plex Mono", monospace'; c.textAlign = 'right';
+      c.fillText(st, pw - 2, y + 4);
+    });
+    // objectives
+    const ox = W - pw - 4;
+    panel(ox, 4, pw, ph, 'OBJECTIVES');
+    const rows = [
+      [`Wave ${Math.max(1, S.wave)}/${WAVES}`, S.wave > 1],
+      [`Contacts ${S.waveCleared}/${S.waveTotal}`, S.waveCleared >= S.waveTotal && S.waveTotal > 0],
+      [`One-shots ${S.stats.oneShotCalls}`, false]
+    ];
+    rows.forEach(([txt, done], i) => {
+      const y = 23 + i * 11;
+      c.strokeStyle = done ? C.good : C.muted; c.lineWidth = 1; c.strokeRect(ox + 8, y - 6, 6, 6);
+      if (done) { c.fillStyle = C.good; c.fillRect(ox + 10, y - 4, 2, 2); }
+      c.fillStyle = C.ink; c.font = '500 8.5px "IBM Plex Mono", monospace'; c.textAlign = 'left';
+      c.fillText(txt, ox + 19, y);
+    });
+    // last callouts
+    const cy = H - ph - 4;
+    panel(4, cy, pw, ph, 'CALLOUTS');
+    (S.calls.length ? S.calls : ['say: "two left"']).slice(0, 3).forEach((t, i) => {
+      c.fillStyle = i ? C.muted : C.amber; c.font = '500 8.5px "IBM Plex Mono", monospace'; c.textAlign = 'left';
+      let s = t; while (c.measureText(s).width > pw - 16 && s.length > 4) s = s.slice(0, -2);
+      c.fillText(s === t ? s : s + '\u2026', 10, cy + 24 + i * 10.5);
+    });
+    // tactical minimap: which streets have contacts
+    const mx = W - pw - 4;
+    panel(mx, cy, pw, ph, 'TAC MAP');
+    const mmx = mx + pw / 2, mmy = cy + 32, sx = pw * .4, sy = 16;
+    c.fillStyle = 'rgba(255,255,255,.12)'; c.fillRect(mmx - sx, mmy - 4, sx * 2, 8); c.fillRect(mmx - 5, mmy - sy, 10, sy * 2);
+    const pos = { left: [mmx - sx * .75, mmy], front: [mmx, mmy - sy * .7], right: [mmx + sx * .75, mmy] };
+    Object.entries(pos).forEach(([z, [px, py]]) => {
+      const g = S.groups.find(x => x.zone === z && live(x));
+      c.fillStyle = !g ? 'rgba(255,255,255,.2)' : g.called ? C.amber : C.hostile;
+      c.beginPath(); c.arc(px, py, g ? 4 + Math.min(3, g.enemies.length) : 2.5, 0, Math.PI * 2); c.fill();
+      if (g) { c.fillStyle = C.ground; c.font = '700 8px "IBM Plex Mono", monospace'; c.textAlign = 'center'; c.fillText(String(g.enemies.length), px, py + 3); }
+    });
+    c.fillStyle = C.good; c.beginPath(); c.arc(mmx, mmy + sy * .75, 3, 0, Math.PI * 2); c.fill();
+  }
+  function draw() {
+    const c = ctx2, now = S ? S.t : 0;
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(bgCanvas, 0, 0); c.restore();
+    // sectors glow when a contact is there
+    const hot = {}; (S ? S.groups : []).forEach(g => { if (live(g)) hot[g.zone] = g.called ? 'called' : 'open'; });
+    Object.entries(ZONES).forEach(([k, z]) => {
+      const st = hot[k];
+      if (st) {
+        c.fillStyle = st === 'open' ? 'rgba(232,98,90,.10)' : 'rgba(240,168,58,.06)';
+        roundRect(X(z.x0), Y(z.y0), X(z.x1 - z.x0), Y(z.y1 - z.y0), 8); c.fill();
+        c.setLineDash([5, 6]); c.strokeStyle = st === 'open' ? alpha(C.hostile, .7) : alpha(C.amber, .4); c.lineWidth = 1.2;
+        roundRect(X(z.x0), Y(z.y0), X(z.x1 - z.x0), Y(z.y1 - z.y0), 8); c.stroke(); c.setLineDash([]);
+      }
+      c.fillStyle = st === 'open' ? C.hostile : 'rgba(228,235,232,.32)'; c.font = `800 ${Math.max(12, W * .034)}px "Saira Condensed", sans-serif`;
+      c.textAlign = 'center'; c.fillText(z.label, X((z.x0 + z.x1) / 2), k === 'front' ? Y(z.y1) + Math.max(14, W * .036) : Y(z.y1) + Math.max(14, W * .036));
+    });
+    // ripple when a street is called
+    (S ? S.groups : []).forEach(g => {
+      if (!g.calledAt || now - g.calledAt > .7) return;
+      const z = ZONES[g.zone], k = (now - g.calledAt) / .7;
+      c.strokeStyle = alpha(C.amber, 1 - k); c.lineWidth = 3;
+      c.beginPath(); c.ellipse(X((z.x0 + z.x1) / 2), Y((z.y0 + z.y1) / 2), X(z.x1 - z.x0) * (.3 + k * .4), Y(z.y1 - z.y0) * (.3 + k * .4), 0, 0, Math.PI * 2); c.stroke();
+    });
+    // squad aim lines
+    bots.forEach(b => {
+      if (isDown(b) || !busy(b)) return;
+      const t = b.task.enemies.find(e => !e.ducked); if (!t) return;
+      if (Math.hypot(postFor(b).x - b.x, postFor(b).y - b.y) > .03) return;
+      c.setLineDash([3, 5]); c.strokeStyle = alpha(C.teal, .4); c.lineWidth = 1;
+      c.beginPath(); c.moveTo(X(b.x), Y(b.y)); c.lineTo(X(t.x), Y(t.y)); c.stroke(); c.setLineDash([]);
+    });
+    // tracers
+    S && S.shots.forEach(s => {
+      const k = Math.max(0, 1 - (now - s.t) / .25);
+      c.strokeStyle = alpha(s.c, k * .9); c.lineWidth = 2.2; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(X(s.x0 + (s.x1 - s.x0) * .3), Y(s.y0 + (s.y1 - s.y0) * .3)); c.lineTo(X(s.x1), Y(s.y1)); c.stroke();
+      c.strokeStyle = `rgba(255,245,220,${k * .8})`; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(X(s.x0 + (s.x1 - s.x0) * .7), Y(s.y0 + (s.y1 - s.y0) * .7)); c.lineTo(X(s.x1), Y(s.y1)); c.stroke(); c.lineCap = 'butt';
+    });
+    const r = Math.max(10, W * .028);
+    (S ? S.groups : []).forEach(g => g.enemies.forEach(e => {
+      const x = X(e.x), y = Y(e.y), ang = angleTo(e.x, e.y, PLAYER.x, PLAYER.y), hit = now - e.hitAt < .12;
+      if (e.ducked) {
+        const left = clamp(1 - (now - e.duckAt) / D.heal, 0, 1);
+        mutant(x, y, r * .85, ang, '#9a4a50', '#5a2228', now + e.wob, .6);
+        c.fillStyle = 'rgba(70,74,78,.95)'; roundRect(x - r * 1.3, y + r * .1, r * 2.6, r * .7, 3); c.fill();
+        c.strokeStyle = 'rgba(232,98,90,.25)'; c.lineWidth = 3; c.beginPath(); c.arc(x, y, r + 8, 0, Math.PI * 2); c.stroke();
+        c.strokeStyle = C.hostile; c.beginPath(); c.arc(x, y, r + 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left); c.stroke();
+        const pulse = reduceMotion ? 1 : .75 + .25 * Math.sin(now * 8);
+        pill('1 HP', x, y - r - 17, C.ground, alpha(C.hostile, pulse), 11);
+        return;
+      }
+      if (g.called) {
+        mutant(x, y, r, ang, hit ? '#ffd7c8' : e.angry ? '#d8704a' : '#c0646a', '#7a2f36', now + e.wob, 1);
+        const k = r + 8, l = 5; c.strokeStyle = e.angry ? C.amber : C.hostile; c.lineWidth = 1.6;
+        [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => { c.beginPath(); c.moveTo(x + sx * k, y + sy * (k - l)); c.lineTo(x + sx * k, y + sy * k); c.lineTo(x + sx * (k - l), y + sy * k); c.stroke(); });
+        drawHealth(x, y, e, r);
+      } else {
+        c.strokeStyle = 'rgba(232,98,90,.55)'; c.lineWidth = 2; c.beginPath(); c.ellipse(x, y, r * .95, r * .95, 0, 0, Math.PI * 2); c.stroke();
+        mutant(x, y, r, ang, '#93716f', '#4a3335', now + e.wob, 1);
+        c.setLineDash([3, 3]); c.strokeStyle = alpha(C.hostile, .85); c.lineWidth = 1.2;
+        c.beginPath(); c.arc(x, y, r + 7, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+        drawLock(x, y - r - 10);
+      }
+      if (e.firedAt && now - e.firedAt < .09) muzzle(x, y, ang, r * .7, C.hostile);
+    }));
+    // sparks
+    S && S.sparks.forEach(p => {
+      const k = (now - p.t) / .4; c.strokeStyle = alpha(C.amber, 1 - k); c.lineWidth = 1.5;
+      const x = X(p.x + p.vx * k * .08), y = Y(p.y + p.vy * k * .08);
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x - p.vx * 4, y - p.vy * 4); c.stroke();
+    });
+    // squad
+    bots.forEach(b => {
+      const x = X(b.x), y = Y(b.y), down = isDown(b);
+      let ang = -Math.PI / 2;
+      const t = busy(b) ? b.task.enemies.find(e => !e.ducked) || b.task.enemies[0] : null;
+      if (t) ang = angleTo(b.x, b.y, t.x, t.y);
+      if (down) { c.globalAlpha = .45; soldier(x, y, r * .95, ang + 1.4, '#5b5b5b', true); c.globalAlpha = 1; pill(`${b.name.toUpperCase()} DOWN`, x, y + r + 13, C.ground, C.hostile, 9); return; }
+      soldier(x, y, r * .95, ang, C.teal, now - b.hitAt < .15);
+      if (b.flash && now - b.flash < .09) muzzle(x, y, ang, r * .95, C.amber);
+      pill(b.name.toUpperCase(), x, y + r + 13, C.teal, 'rgba(10,14,16,.85)', 9.5);
+      if (b.hp < BOT_HP) { const hk = b.hp / BOT_HP; c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(x - 15, y + r + 22, 30, 4); c.fillStyle = hk > .5 ? C.good : hk > .25 ? C.amber : C.hostile; c.fillRect(x - 15, y + r + 22, 30 * hk, 4); }
+    });
+    // you
+    const px = X(PLAYER.x), py = Y(PLAYER.y);
+    soldier(px, py, r * 1.05, -Math.PI / 2, C.amber, S && now - (S.hitT || -9) < .15);
+    // floating text
+    S && S.flashes.forEach(f => {
+      const k = now - f.t;
+      c.fillStyle = alpha(f.c, Math.max(0, 1 - k / 1.1)); c.font = '800 15px "Saira Condensed", sans-serif'; c.textAlign = 'center';
+      c.fillText(f.text, X(f.x), Y(f.y) - r - 22 - k * 16);
+    });
+    if (S && S.wave) hudPanels(now);
+    // banners
+    if (S && S.banner && now - S.bannerAt < 2.5) {
+      const k = clamp(2.5 - (now - S.bannerAt), 0, 1);
+      c.fillStyle = `rgba(8,10,12,${.78 * k})`; c.fillRect(0, H * .38, W, H * .2);
+      c.fillStyle = alpha(C.amber, k); c.font = `800 ${Math.round(W * .1)}px "Saira Condensed", sans-serif`; c.textAlign = 'center';
+      c.fillText(S.banner, W / 2, H * .49);
+      c.fillStyle = alpha(C.ink, k); c.font = `500 ${Math.round(W * .032)}px "IBM Plex Sans", sans-serif`;
+      c.fillText(S.bannerSub, W / 2, H * .545);
+    }
+    // damage vignette
+    if (S && S.hitT && now - S.hitT < .35) {
+      const k = 1 - (now - S.hitT) / .35;
+      const vg = c.createRadialGradient(W / 2, H / 2, W * .3, W / 2, H / 2, W * .75);
+      vg.addColorStop(0, 'rgba(232,98,90,0)'); vg.addColorStop(1, `rgba(232,98,90,${.35 * k})`);
+      c.fillStyle = vg; c.fillRect(0, 0, W, H);
+    }
+  }
+
+  // ---------- simulation ----------
+  // Squadmates sent to the same street spread out instead of stacking.
+  function postFor(b) {
+    const z = ZONES[b.task.zone], mates = b.task.bots.filter(x => x.task === b.task && !isDown(x)), i = Math.max(0, mates.indexOf(b));
+    const off = (i - (mates.length - 1) / 2) * .06;
+    return b.task.zone === 'front' ? { x: z.post.x + off, y: z.post.y } : { x: z.post.x, y: z.post.y + off };
+  }
+  function step(dt) {
+    S.t += dt;
+    if (S.phase === 'intermission' && S.t >= S.phaseEnd) { S.phase = 'fight'; S.nextSpawn = S.t + .5; }
+    if (S.phase === 'cleared' && S.t >= S.nextWaveAt) startWave(S.wave + 1);
+    if (S.phase === 'fight') {
+      const cfg = waveCfg(S.wave), scale = 1 - .05 * (S.wave - 1);
+      if (S.toSpawn > 0 && S.t >= S.nextSpawn) {
+        if (S.groups.filter(live).length < cfg.maxLive && spawnGroup()) S.toSpawn--;
+        S.nextSpawn = S.t + rand(D.gap[0], D.gap[1]) * scale;
+      }
+      if (S.toSpawn === 0 && !S.groups.some(live)) { clearWave(); if (!S.running) return; }
+    }
+    bots.forEach(b => { if (b.downUntil > 0 && S.t >= b.downUntil) { b.downUntil = -1; b.hp = Math.round(BOT_HP * .6); b.x = b.home.x; b.y = b.home.y; log('sys', 'SYS', `${b.name} is back up.`); } });
+    S.groups.forEach(g => {
+      if (!g.called && !g.warned && live(g) && S.t - g.spawnT > 6) { g.warned = true; log('sys', 'SYS', `Uncalled contact ${g.zone.toUpperCase()} is hitting you.`); }
+      g.enemies.forEach(e => {
+        if (e.ducked) {
+          if (S.t - e.duckAt >= D.heal) {
+            // Escaped: back to full health and firing fast, but it only ducks once, so the wave can always be finished.
+            e.ducked = false; e.tough = false; e.angry = true; e.hp = MAX_HP; e.fireCd = rand(.8, 1.5); S.stats.oneShotEscapes++;
+            S.flashes.push({ x: e.x, y: e.y, t: S.t, text: 'HEALED', c: C.hostile });
+            log('sys', 'SYS', `The one-shot ${g.zone.toUpperCase()} healed up. Call "one shot ${g.zone}" faster.`);
+          }
+          return;
+        }
+        e.fireCd -= dt;
+        if (e.fireCd <= 0) {
+          e.firedAt = S.t;
+          // Called hostiles turn on the squadmates engaging them: you are suppressed-safe, your squad draws the fire.
+          const engagedNow = g.called && g.bots.some(b => b.task === g && !isDown(b) && Math.hypot(postFor(b).x - b.x, postFor(b).y - b.y) < .03);
+          e.fireCd = e.angry ? rand(1.6, 2.4) : engagedNow ? rand(2.6, 3.6) : g.called ? rand(4, 6) : rand(2.4, 3.8);
+          // Engaged squadmates draw some of the fire.
+          const engaged = g.bots.filter(b => b.task === g && !isDown(b) && Math.hypot(postFor(b).x - b.x, postFor(b).y - b.y) < .03);
+          if (engaged.length && Math.random() < .85) {
+            const b = engaged[Math.floor(Math.random() * engaged.length)];
+            S.shots.push({ x0: e.x, y0: e.y, x1: b.x, y1: b.y, t: S.t, c: C.hostile });
+            hitBot(b, Math.round(D.dmg * 2.5));
+          } else {
+            S.hp -= D.dmg; S.hitT = S.t; S.waveDmg += D.dmg; if (!g.called) S.waveUncalledHits++;
+            S.shots.push({ x0: e.x, y0: e.y, x1: PLAYER.x + rand(-.02, .02), y1: PLAYER.y, t: S.t, c: C.hostile });
+          }
+        }
+      });
+    });
+    bots.forEach(b => {
+      if (isDown(b)) return;
+      const g = busy(b) ? b.task : null;
+      if (!g && b.mode === 'task') b.mode = 'home';
+      const dest = g ? postFor(b) : (b.mode === 'hold' ? { x: b.x, y: b.y } : b.home);
+      const d = Math.hypot(dest.x - b.x, dest.y - b.y), sp = .45 * dt;
+      if (d > .005) { b.x += (dest.x - b.x) / d * Math.min(sp, d); b.y += (dest.y - b.y) / d * Math.min(sp, d); }
+      b.cd -= dt;
+      if (g && d < .03 && b.cd <= 0) {
+        const targets = g.enemies.filter(e => !e.ducked).sort((a, z) => a.hp - z.hp);
+        if (targets.length) { b.cd = 0.7; botShoot(b, g, targets[0], 1); }
+      }
+    });
+    S.groups = S.groups.filter(live);
+    S.shots = S.shots.filter(s => S.t - s.t < .3);
+    S.flashes = S.flashes.filter(f => S.t - f.t < 1.1);
+    S.sparks = S.sparks.filter(p => S.t - p.t < .4);
+    if (S.hp <= 0) endRun();
+  }
+  let last = 0;
+  function loop(ts) {
+    if (!S.running) return;
+    const dt = Math.min(.05, (ts - (last || ts)) / 1000); last = ts;
+    if (!S.paused) { step(dt); hud(); draw(); }
+    if (S.running) requestAnimationFrame(loop);
+  }
+  function hud() {
+    const hp = Math.max(0, S.hp), fill = document.getElementById('hpFill');
+    fill.style.width = hp + '%';
+    fill.style.background = hp > 50 ? 'var(--good)' : hp > 25 ? 'var(--amber)' : 'var(--hostile)';
+    document.getElementById('waveOut').textContent = `${Math.max(1, S.wave)}/${WAVES}`;
+    document.getElementById('scoreOut').textContent = S.score;
+  }
+
+  // ---------- report card (pure scoring) ----------
+  function grade(st) {
+    const c = st.callouts, n = c.length;
+    const avg = n ? c.reduce((a, x) => a + x.reaction, 0) / n : null;
+    // Reaction is measured from spawn to the end of your sentence, so ~2 s is excellent once speaking time is included.
+    const speed = avg === null ? 0 : Math.min(1, Math.max(0, (5 - avg) / 3));
+    const countAcc = n ? c.filter(x => x.countRight).length / n : 0;
+    const complete = n ? c.filter(x => x.hasCount && x.hasAction).length / n : 0;
+    const coverage = st.groupsTotal ? st.groupsCalled / st.groupsTotal : 0;
+    const osTotal = st.oneShotCalls + st.oneShotEscapes;
+    const oneShot = osTotal ? st.oneShotCalls / osTotal : 1;
+    const per = Math.max(1, st.wavesPlayed || 1);
+    const comp = Math.max(0, .3 * speed + .25 * countAcc + .1 * complete + .2 * coverage + .15 * oneShot + .02 * Math.min(st.multi / per, 3) + .02 * Math.min(st.stacked / per, 2) - .06 * (st.wrong + st.lockedShots) / per - .04 * st.vague / per);
+    const letter = comp >= .85 ? 'A' : comp >= .7 ? 'B' : comp >= .55 ? 'C' : comp >= .4 ? 'D' : 'F';
+    const weak = [
+      [coverage, 'Some contacts were never called. Scan all three streets and call the moment you see one.'],
+      [countAcc, 'Say the count every time. "Two left" tells your squad far more than "left".'],
+      [speed, `Call first, aim second. Your average was ${avg === null ? '-' : avg.toFixed(1)} s; aim for under 2.5 s.`],
+      [complete, 'Add what you are doing: "two left, engaging" tells the squad the plan.'],
+      [oneShot, 'Hostiles at 1 HP ducked and healed. Call "one shot left" so the squad finishes them.']
+    ].sort((a, b) => a[0] - b[0]);
+    let tip = weak[0][1];
+    if (st.botsDowned / per >= 1) tip = 'Your squad kept going down. Send two to big groups: "Ace and Brick, four left".';
+    if (st.vague / per >= 1) tip = 'Several calls had no sector. Every count and order needs a place: "two left", "push right".';
+    if (st.lockedShots / per >= 1) tip = `You tried to shoot ${st.lockedShots} locked hostiles. Callout before trigger.`;
+    if (!n) tip = 'No callouts landed. Start with "one left" and build from there.';
+    return { letter, avg, countAcc, complete, coverage, oneShot, tip };
+  }
+  window.gradeRound = grade;
+
+  // ---------- screens ----------
+  const overlay = document.getElementById('overlay'), card = document.getElementById('card'), pauseBtn = document.getElementById('pauseBtn'), restartBtn = document.getElementById('restartBtn');
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+  const btn = (cls, text, fn) => { const b = el('button', cls, text); b.type = 'button'; b.addEventListener('click', fn); return b; };
+  function diffPicker() {
+    const wrap = el('div', 'diff');
+    const row = el('div', 'diff-row'); row.setAttribute('role', 'radiogroup'); row.setAttribute('aria-label', 'Difficulty');
+    const note = el('p', 'diff-note', D.note);
+    Object.entries(DIFFS).forEach(([k, v]) => {
+      const b = btn('chip', v.label, () => {
+        diffKey = k; D = DIFFS[k]; note.textContent = v.note; store.set('squadcallout.diff', k);
+        row.querySelectorAll('button').forEach(x => { const on = x === b; x.setAttribute('aria-checked', String(on)); x.setAttribute('aria-pressed', String(on)); });
+      });
+      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(k === diffKey)); b.setAttribute('aria-pressed', String(k === diffKey));
+      row.append(b);
+    });
+    wrap.append(row, note);
+    return wrap;
+  }
+  const stopRun = () => { if (S) { S.running = false; S.paused = false; } pauseBtn.disabled = true; restartBtn.disabled = true; if (mic.on) mic.set(false, true); };
+  const restartWave = () => { const sv = loadSave(); stopRun(); startRun(sv); };
+  const newDrill = () => { stopRun(); store.del(SAVE_KEY); startRun(null); };
+  function showMenu() {
+    card.innerHTML = '';
+    card.append(el('h2', '', 'No callout, no shot'));
+    const p1 = el('p'); p1.innerHTML = 'Every hostile spawns <strong>locked</strong>. Call it with a <strong>count</strong> and a <strong>street</strong> (left, front, right) to unlock it and send your squad.';
+    const p2 = el('p', 'example', '"Two left, engaging. Ace and Brick, four right."');
+    const p3 = el('p'); p3.innerHTML = 'Send anyone anywhere, or stack two on a big group. Tough hostiles <strong>duck at 1 HP</strong>: call <strong>"one shot left"</strong> to finish them.';
+    const p4 = el('p'); p4.innerHTML = `Survive <strong>${WAVES} waves</strong> that grow each round. Clearing a wave pays bonus points, more for flawless waves. Progress saves every wave.`;
+    card.append(p1, p2, p3, p4, diffPicker());
+    const row = el('div', 'btn-row');
+    const sv = loadSave();
+    if (sv) {
+      row.append(btn('primary', `Continue wave ${sv.wave}`, () => startRun(sv)), btn('secondary', 'New drill', newDrill));
+      card.append(row, el('p', 'save-note', `Saved: wave ${sv.wave} \u00b7 ${DIFFS[sv.diff].label} \u00b7 ${sv.score} pts`));
+    } else {
+      row.append(btn('primary', 'Start drill', () => startRun(null)));
+      card.append(row);
+    }
+    overlay.hidden = false;
+  }
+  function showPause() {
+    card.innerHTML = '';
+    card.append(el('h2', '', `Paused \u00b7 wave ${S.wave}`));
+    card.append(el('p', '', `HP ${Math.max(0, Math.round(S.hp))} \u00b7 ${S.score} pts. Progress is saved from the start of wave ${S.wave}.`));
+    const row = el('div', 'btn-row');
+    row.append(btn('primary', 'Resume', resume), btn('secondary', `Restart wave ${S.wave}`, restartWave));
+    const row2 = el('div', 'btn-row');
+    row2.append(btn('secondary', 'New drill', newDrill), btn('secondary', 'Quit to menu', () => { stopRun(); showMenu(); }));
+    card.append(row, row2);
+    overlay.hidden = false;
+    row.querySelector('button').focus();
+  }
+  function pause() {
+    if (!S || !S.running || S.paused) return;
+    S.paused = true; pauseBtn.textContent = '\u25b6'; pauseBtn.setAttribute('aria-label', 'Resume');
+    if (mic.on) mic.set(false, true);
+    draw(); showPause();
+  }
+  function resume() {
+    if (!S || !S.paused) return;
+    S.paused = false; last = 0; overlay.hidden = true; pauseBtn.textContent = 'II'; pauseBtn.setAttribute('aria-label', 'Pause');
+    if (mic.wanted && !mic.on) mic.set(true);
+  }
+  pauseBtn.addEventListener('click', () => (S && S.paused ? resume() : pause()));
+  restartBtn.addEventListener('click', () => { if (S && (S.running || S.over)) restartWave(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+
+  function endRun() {
+    S.running = false; S.over = true; pauseBtn.disabled = true; draw(); hud();
+    restartBtn.disabled = !loadSave();
+    if (mic.on) mic.set(false, true);
+    if (S.won) store.del(SAVE_KEY);
+    const r = grade(S.stats), pct = v => Math.round(v * 100) + '%';
+    card.innerHTML = '';
+    card.append(el('h2', '', (S.won ? 'All waves cleared' : `Squad down \u00b7 wave ${S.wave}`) + ' \u00b7 ' + D.label));
+    card.append(el('div', 'grade', r.letter));
+    const dl = el('dl', 'stats');
+    [['Score', S.score], ['Wave clear bonuses', `+${S.stats.waveBonus}`], ['Waves', `${S.won ? WAVES : S.wave - 1} of ${WAVES} cleared (${S.stats.flawless} flawless)`], ['Contacts called', `${S.stats.groupsCalled} of ${S.stats.groupsTotal}`], ['Avg reaction', r.avg === null ? '-' : r.avg.toFixed(1) + ' s'],
+     ['Count accuracy', pct(r.countAcc)], ['Full callouts', pct(r.complete)], ['One-shots called', `${S.stats.oneShotCalls} of ${S.stats.oneShotCalls + S.stats.oneShotEscapes}`],
+     ['Multi-contact calls', S.stats.multi], ['Two or more sent', S.stats.stacked], ['Orders by name', S.stats.named], ['Squad downed', S.stats.botsDowned], ['Calls with no sector', S.stats.vague], ['Missed chances to combine', S.stats.missedCombo],
+     ['Wrong sector calls', S.stats.wrong], ['Shots at locked', S.stats.lockedShots]]
+      .forEach(([k, v]) => dl.append(el('dt', '', k), el('dd', '', String(v))));
+    card.append(dl, el('p', 'tip', r.tip), diffPicker());
+    const row = el('div', 'btn-row');
+    const sv = !S.won && loadSave();
+    if (sv) row.append(btn('primary', `Retry wave ${sv.wave}`, () => startRun(loadSave())));
+    row.append(btn(sv ? 'secondary' : 'primary', 'Replay drill', newDrill));
+    card.append(row);
+    overlay.hidden = false;
+  }
+  function startRun(save) {
+    if (save) { diffKey = save.diff; D = DIFFS[diffKey]; }
+    S = freshState(save ? { hp: Math.max(40, save.hp), score: save.score, stats: Object.assign(newStats(), save.stats) } : null);
+    S.running = true; last = 0;
+    logEl.innerHTML = '';
+    overlay.hidden = true; pauseBtn.disabled = false; restartBtn.disabled = false; pauseBtn.textContent = 'II';
+    startWave(save ? save.wave : 1);
+    hud(); requestAnimationFrame(loop);
+    if (mic.wanted && !mic.on) mic.set(true);
+  }
+
+  // ---------- firing ----------
+  cv.addEventListener('pointerdown', ev => {
+    if (!S || !S.running || S.paused) return;
+    const rect = cv.getBoundingClientRect();
+    const nx = (ev.clientX - rect.left) / rect.width, ny = (ev.clientY - rect.top) / rect.height;
+    let best = null, bd = .06;
+    S.groups.forEach(g => g.enemies.forEach(e => { if (e.ducked) return; const d = Math.hypot((e.x - nx) * W / H, e.y - ny); if (d < bd) { bd = d; best = { g, e }; } }));
+    if (!best) return;
+    if (!best.g.called) { S.stats.lockedShots++; S.flashes.push({ x: best.e.x, y: best.e.y, t: S.t, text: 'LOCKED - CALL IT', c: C.hostile }); return; }
+    S.shots.push({ x0: PLAYER.x, y0: PLAYER.y, x1: best.e.x, y1: best.e.y, t: S.t, c: C.amber });
+    hitEnemy(best.g, best.e, 1, PLAYER.x, PLAYER.y);
+  });
+
+  // ---------- typed + pad ----------
+  document.getElementById('typeForm').addEventListener('submit', ev => {
+    ev.preventDefault();
+    const inp = document.getElementById('typeIn');
+    handleUtterance(inp.value); inp.value = '';
+  });
+  let padCount = 'two';
+  document.querySelectorAll('[data-count]').forEach(b => b.addEventListener('click', () => {
+    padCount = b.dataset.count;
+    document.querySelectorAll('[data-count]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+  document.querySelectorAll('[data-zone]').forEach(b => b.addEventListener('click', () => {
+    handleUtterance(padCount === 'oneshot' ? `one shot ${b.dataset.zone}` : `${padCount} ${b.dataset.zone}, engaging`);
+  }));
+
+  // ---------- open mic ----------
+  const talk = document.getElementById('talkBtn'), micStatus = document.getElementById('micStatus');
+  const status = t => { micStatus.textContent = t; };
+  const mic = { on: false, wanted: false, set: () => {} };
+  const paint = () => {
+    talk.classList.toggle('on', mic.on);
+    talk.setAttribute('aria-pressed', String(mic.on));
+    talk.innerHTML = mic.on ? 'MIC<br>ON' : 'MIC<br>OFF';
+  };
+  const Cap = window.Capacitor;
+  const NativeSR = Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.SpeechRecognition;
+  const WebSR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (NativeSR) {
+    // Installed app: Android listens for one phrase at a time, so loop it while the mic is on.
+    let looping = false, permOK = false;
+    const runLoop = async () => {
+      if (looping) return; looping = true;
+      while (mic.on) {
+        status('Listening... call contacts any time.');
+        try {
+          const r = await NativeSR.start({ language: 'en-US', maxResults: 1, partialResults: false, popup: false });
+          const said = r && r.matches && r.matches[0];
+          if (said && mic.on) handleUtterance(said, true);
+        } catch (e) {
+          const m = String((e && e.message) || e || '').toLowerCase();
+          if (m.includes('permission')) { mic.on = false; mic.wanted = false; paint(); status('Microphone permission is off. Allow it in Settings > Apps > Squad Callout.'); break; }
+          await sleep(80);
+        }
+      }
+      looping = false;
+      if (!mic.on && !/permission/i.test(micStatus.textContent)) status('Mic off. Tap MIC to open it.');
+    };
+    mic.set = async (on, auto) => {
+      if (on && !permOK) {
+        try {
+          const st = await NativeSR.requestPermissions();
+          if (!st || st.speechRecognition !== 'granted') { status('Microphone permission is off. Allow it in Settings > Apps > Squad Callout.'); return; }
+          permOK = true;
+        } catch (e) { status('Couldn\u2019t ask for the microphone. Check the app\u2019s permissions in Settings.'); return; }
+      }
+      mic.on = on; if (!auto) mic.wanted = on; paint();
+      if (on) runLoop(); else { try { await NativeSR.stop(); } catch (e) {} }
+    };
+  } else if (WebSR && window.isSecureContext) {
+    const rec = new WebSR();
+    rec.lang = 'en-US'; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
+    rec.onresult = ev => {
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const t = ev.results[i][0].transcript;
+        if (ev.results[i].isFinal) handleUtterance(t, true);
+        else document.getElementById('heard').textContent = 'Hearing: ' + t;
+      }
+    };
+    rec.onerror = ev => {
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed' || ev.error === 'audio-capture') {
+        mic.on = false; mic.wanted = false; paint();
+        status('The browser blocked the mic for this page. Allow Microphone in the site permissions, then reload.');
+      }
+    };
+    rec.onend = () => { if (mic.on) setTimeout(() => { try { rec.start(); } catch (e) {} }, 50); };
+    mic.set = async (on, auto) => {
+      if (on) {
+        try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t => t.stop()); }
+        catch (e) { status('The browser blocked the mic for this page. Allow Microphone in the site permissions, then reload.'); return; }
+      }
+      mic.on = on; if (!auto) mic.wanted = on; paint();
+      if (on) { try { rec.start(); } catch (e) {} status('Listening... call contacts any time.'); }
+      else { try { rec.stop(); } catch (e) {} status('Mic off. Tap MIC to open it.'); }
+    };
+  } else {
+    talk.disabled = true;
+    status('Voice isn\u2019t available here. Use the callout pad or type, or install the app for voice.');
+  }
+  talk.addEventListener('click', () => mic.set(!mic.on));
+
+  // ---------- boot: a sample scene behind the briefing ----------
+  S = freshState();
+  S.wave = 2; S.waveTotal = 5; S.waveCleared = 2;
+  S.groups = [
+    { zone: 'left', count: 3, spawnT: 0, called: false, bots: [], enemies: [{ x: .12, y: .30, hp: 3, wob: 0 }, { x: .21, y: .40, hp: 3, wob: 2 }, { x: .14, y: .48, hp: 3, wob: 4 }] },
+    { zone: 'front', count: 2, spawnT: 0, called: true, bots: [], enemies: [{ x: .44, y: .14, hp: 2, wob: 1 }, { x: .57, y: .2, hp: 1, ducked: true, duckAt: -1, wob: 3 }] }
+  ];
+  showMenu();
+  window.addEventListener('resize', resize);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+  resize();
+})();
+</script>
