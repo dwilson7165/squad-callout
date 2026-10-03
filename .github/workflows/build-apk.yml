@@ -1,0 +1,51 @@
+name: Build APK
+
+on:
+  push:
+    paths:
+      - '*.html'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Pick the newest game file
+        run: |
+          GAME=$(ls squad-callout*.html | sort -V | tail -1)
+          echo "Building from $GAME"
+          mkdir -p app/www
+          cp "$GAME" app/www/index.html
+      - name: Create the Android project
+        working-directory: app
+        run: |
+          npm init -y
+          npm install @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8 @capacitor-community/speech-recognition@7 @capacitor-community/text-to-speech@8
+          echo '{ "appId": "com.owcrew.squadcallout", "appName": "Squad Callout", "webDir": "www" }' > capacitor.config.json
+          npx cap add android
+          npx cap sync android
+      - name: Build the APK
+        working-directory: app/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../../SquadCallout.apk
+      - name: Publish it as a download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Squad Callout build ${{ github.run_number }}
+          files: SquadCallout.apk
+          make_latest: true
