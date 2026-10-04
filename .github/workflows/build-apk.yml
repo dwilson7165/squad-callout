@@ -15,33 +15,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
+
       - name: Pick the newest game file
         run: |
           GAME=$(ls squad-callout*.html | sort -V | tail -1)
           echo "Building from $GAME"
           mkdir -p app/www
           cp "$GAME" app/www/index.html
+
       - name: Create the Android project
         working-directory: app
         run: |
           npm init -y
-          npm install @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8 @capacitor-community/speech-recognition@7 @capacitor-community/text-to-speech@8
+          npm install @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8 @capacitor-community/speech-recognition@7 @capacitor-community/text-to-speech@8 @capacitor-community/keep-awake@8
           echo '{ "appId": "com.owcrew.squadcallout", "appName": "Squad Callout", "webDir": "www" }' > capacitor.config.json
           npx cap add android
           npx cap sync android
+
+      - name: Use the same signing key every build (updates keep your saves)
+        run: |
+          mkdir -p ~/.android
+          echo "/u3+7QAAAAIAAAABAAAAAQAPYW5kcm9pZGRlYnVna2V5AAABoQPyNSkAAAUAMIIE/DAMBgorBgEEASoCEQEBBIIE6urIEg+3rQ6422NXAULf05h02L5KbQj3LwYYMgj+3vXt9pnvQcKl9QAXIH/Q8aCnC8+Fov1xKM/jAGGGfBiu1a5tsg0mL09LmuwgG8qgTOqCJis9QhhFfPon09ey3KMagkIy8YbS8M2imHhVSw/dpSpq2ewjpq+TMhITFIwdHTzaHtrfpvNZGDfZ+kPqA/AJbvHYtQWIcQ5Bo+D7VX2mTAuVTrCvJOla1ce5uVEGtEZ/2QmWqBkYbbykSN50+1o5EzjGEe8OnK/ugB6/Ss8oLNMhapJjU3sGxEHaKmodmz/qWjIZ2P5uptoUpUQCsVJw0NmexJJoA2Kc4vNK7GHWEmpB2l5oC1hEIR1vrYMMyqNMzpMCDOs8JP8NagCnDKkjQlx6rD+SJcuf3XtQBxl9W3YZQhLOqaSKXFwbJYfh2hz5d1DkS7/bp8HLT3bDPflkVvOPe31PHZYfQGanzK1PcjjNFNsiqaQtVhS2L3YcmlfCkJeniKz6B4TB2PWHnHY5c8Z6SW3hXKckUmvgLZ1ABcyE0E2glzS/yb25I1eHPOFbyVjp2EfGR7zKvtMKZAWPAcQEvnfz9/NDHxagNlHefUUeLMV35qO5BFbLzFhbNG+t3WjuaDo0gliQbmKSgaN4fDqtOGHUgUWs1aaSEcB+mlBTck2ECYmbmtXLRjsWPCayHvbV9H6mRh32Rmcr+hTKdN44Tr/j6w2P4wRwYUR38H5NWIjenphXvhtwjOeVC7PLx1hlUf3tm5JqI0zOJaLcLKDc98+IJ7UDEPWqDVw7IfK7SpAErijDtNUjw5qmak3lsuq3yJIPRUDYgUvrmAZzxVCkK4Jqsj96Nc5MXtaW+TOnO9fyuHJqDv0Rdm1rLCOCJQPzGvxzfIvYsoAobKkA2oKUCJwUM/zPtmEvYXbgKvziIiMsSW8oCRzY1lPdBEFM6cZoI13LB3dUW0GwNYMK6Hh+eEi9oaOJgGTgrI0GJgA/74C2B+Hzmapu7OVN2zdYS2VDihp893PcrTkGCL6KTtHV7ZN9SY2tT1qDSboyvQ0n1LtqGGWx1ECP1bdhG3JuXAFBL5YUzlFwtg8V3sFoCO13H/QwE/sBB2OvWFlbXPOuzyK56z1wB0V74GWazB1zUEVj/AAzlXi689qfgJF9qTcYJf/qCQnFnbNB5Qrr0GcACmRaWvuC3LB4To/Pf+4LHoigP4gcIuwcLZVo1DN5nHkne1wOw5K5kKuLorpLMoJS90Ij74PRMO+udZRfqJAFArTR6nb7G6PyfrcbQx8pMZo2X9KA6/oFhB4SWg9z0UjNqw33rngQ38LIzvMLZQRBqzLeHY4QSsjpfdS0MO7NwwjVB6wnovOSXkldoLmzUbqaVN2rNKC98jUMXaGoEHCw3XYOmVYaaB9zucI75kJzATJI6w7WuCcms4q3ChUlFr1FxZnwyderbNj2dsvPl8v133G3uxHmXUIIqMeear7s/Fd2lXej98pPh2KgwFujvBlRdx83nVTv9tW6T2MPb5cos69AZzuT8AoTCz0LMcs8NkG5C6IWxjh86KA1WHj205lnpsDW4k5PgKxEa0SAvKSXrjUXJU2Geh8SxyUoG7RBtHgcrSY7Ag62Jq3TGl6OQ1Yn51vqqRxph3x1pLTcPgNAhH1jOOkgI5pC301lY2dCyiC3xjcd/vhGSGYAAAABAAVYLjUwOQAAAxcwggMTMIIB+6ADAgECAggDaQRY3pETPzANBgkqhkiG9w0BAQwFADA3MQswCQYDVQQGEwJVUzEQMA4GA1UEChMHQW5kcm9pZDEWMBQGA1UEAxMNQW5kcm9pZCBEZWJ1ZzAgFw0yNjEwMDMyMjQ2MDdaGA8yMDU0MDIxODIyNDYwN1owNzELMAkGA1UEBhMCVVMxEDAOBgNVBAoTB0FuZHJvaWQxFjAUBgNVBAMTDUFuZHJvaWQgRGVidWcwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC2nMayyltctV/QafqSIRU8JxMwJn+BNYHh41LUsDvCJNRKXf+qaZHoqVkcrKJv75Ad6qySc4zEoTY1Sd2iF7yeac8p+/FhprmgUtpt4LX5ZXuM7ntHwl8rBUPozqC8ITJWUuR2TgIt2U42ekWcCZlCTZCdVtYu8J4Gg4bzp3Qt6UuXWLMD4DvG6YrldZfUA8Z9sz2gwch0/V/LTGgMCP2Rawf6Cv+xH7y5Qro8fqe6CrA1fRf9zSbap8R/RFY8NspbbaTSQaVhwYDIzJU8Qwt31rsg4eOylVeWmdpyn118k+Qy3GPPOVTtqYwl/t/X6jEVPPqbobMcHP8GWwUDqJLHAgMBAAGjITAfMB0GA1UdDgQWBBRLfOGyL5ngnznzpplPOz8H9dudPDANBgkqhkiG9w0BAQwFAAOCAQEAjVUSjQkHj6sHEpNr11dA3Afu1VjEzhuAUeOe+D8jaMc505S0Xob2Lqv8K9daHXqaq7AtSb7S50ntXA1Ip4wjEnzMz142P8Ja7btQh/6oYkoKGu7N9ushVNknOXai/cqwKkckQyYiJ+SKJgwjaj1ex0M13WCRHyWJU+wQ1xpWTYsBrkehMAFZPYA9TwVA+WG+pZEG5Jte4e1iusPbjMFpevvKZTIWxVKcylYgxkNPX5yOez7JJOX6YvTGnogDxa6EFFvEAvAewEWSwnDlUvPMz6GmmFlQLR+QUBPugMZdc+Igb+f8trZ+lwwy9nHreypZAA9oyIfrSy8tQk5iAXdoTUJ6HgXxpQe9J838QOxjaM9LCUnG" | base64 -d > ~/.android/debug.keystore
+
       - name: Build the APK
         working-directory: app/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
           cp app/build/outputs/apk/debug/app-debug.apk ../../SquadCallout.apk
+
       - name: Publish it as a download
         uses: softprops/action-gh-release@v2
         with:
